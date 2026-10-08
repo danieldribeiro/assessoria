@@ -1,3 +1,4 @@
+import { Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BotaoExcluir } from "@/components/controles";
@@ -55,7 +56,12 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
       >
         <PainelLateral
           titulo="Editar empresa"
-          gatilho="Editar"
+          gatilho={
+            <>
+              <Pencil />
+              Editar
+            </>
+          }
           classeGatilho={classeBotao("secundario")}
           acao={salvarEmpresa.bind(null, empresa.id)}
           rodape={
@@ -69,7 +75,12 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
         </PainelLateral>
         <PainelLateral
           titulo="Novo diagnóstico"
-          gatilho="Novo diagnóstico"
+          gatilho={
+            <>
+              <Plus />
+              Novo diagnóstico
+            </>
+          }
           classeGatilho={classeBotao("primario")}
           acao={criarDiagnostico.bind(null, empresa.id)}
           rotuloSalvar="Criar diagnóstico"
@@ -123,7 +134,7 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
           {empresa.observacoes && (
             <Cartao>
               <CabecalhoCartao titulo="Observações" />
-              <p className="whitespace-pre-wrap px-4 py-3 text-sm text-slate-700">{empresa.observacoes}</p>
+              <p className="whitespace-pre-wrap px-5 py-4 text-sm text-slate-700">{empresa.observacoes}</p>
             </Cartao>
           )}
         </div>
@@ -132,7 +143,12 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
           <CabecalhoCartao titulo="Contatos" contagem={empresa.contatos.length}>
             <PainelLateral
               titulo="Novo contato"
-              gatilho="+ Adicionar"
+              gatilho={
+            <>
+              <Plus />
+              Adicionar
+            </>
+          }
               classeGatilho={classeBotao("fantasma", true)}
               acao={salvarContato.bind(null, empresa.id, null)}
             >
@@ -147,7 +163,7 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
                 <li key={c.id}>
                   <PainelLateral
                     titulo="Editar contato"
-                    classeGatilho="block w-full px-4 py-3 text-left hover:bg-slate-50"
+                    classeGatilho="block w-full px-5 py-3 text-left hover:bg-slate-50"
                     acao={salvarContato.bind(null, empresa.id, c.id)}
                     rodape={
                       <BotaoExcluir acao={excluirContato.bind(null, c.id)} pergunta={`Excluir o contato ${c.nome}?`} />

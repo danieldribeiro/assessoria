@@ -1,8 +1,9 @@
+import { Building2, Plus } from "lucide-react";
 import Link from "next/link";
 import { EtiquetaStatus } from "@/components/etiquetas";
 import { CamposEmpresa } from "@/components/formularios";
 import { PainelLateral } from "@/components/painel-lateral";
-import { CabecalhoPagina, Cartao, Vazio, classeBotao, classeInput, classeTabela as t } from "@/components/ui";
+import { CabecalhoPagina, Cartao, Vazio, classeBotao, classeInput, classeTabela as t, iniciais } from "@/components/ui";
 import { formatarPeriodo } from "@/lib/datas";
 import { criarCliente } from "@/lib/supabase/server";
 import { salvarEmpresa } from "@/server/empresas";
@@ -36,10 +37,15 @@ export default async function Empresas({ searchParams }: PageProps<"/empresas">)
 
   return (
     <>
-      <CabecalhoPagina titulo="Empresas" subtitulo="Clientes da assessoria">
+      <CabecalhoPagina titulo="Empresas" icone={<Building2 />} subtitulo="Clientes da assessoria e seus diagnósticos">
         <PainelLateral
           titulo="Nova empresa"
-          gatilho="Nova empresa"
+          gatilho={
+            <>
+              <Plus />
+              Nova empresa
+            </>
+          }
           classeGatilho={classeBotao("primario")}
           acao={salvarEmpresa.bind(null, null)}
           rotuloSalvar="Cadastrar"
@@ -104,16 +110,21 @@ export default async function Empresas({ searchParams }: PageProps<"/empresas">)
                 return (
                   <tr key={e.id} className={t.linha}>
                     <td className={t.td}>
-                      <Link href={`/empresas/${e.id}`} className="font-medium text-slate-900 hover:text-marca-700">
-                        {e.nome}
+                      <Link href={`/empresas/${e.id}`} className="group flex items-center gap-3">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-600 group-hover:bg-marca-50 group-hover:text-marca-700">
+                          {iniciais(e.nome)}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-medium text-slate-900 group-hover:text-marca-700">{e.nome}</span>
+                          {e.cnpj && <span className="block text-xs text-slate-500">{e.cnpj}</span>}
+                        </span>
                       </Link>
-                      {e.cnpj && <div className="text-xs text-slate-500">{e.cnpj}</div>}
                     </td>
-                    <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{e.segmento}</td>
-                    <td className={`${t.td} hidden text-slate-600 sm:table-cell`}>
+                    <td className={`${t.td} hidden align-middle text-slate-600 md:table-cell`}>{e.segmento}</td>
+                    <td className={`${t.td} hidden align-middle text-slate-600 sm:table-cell`}>
                       {responsavel?.nome ?? <span className="text-slate-400">—</span>}
                     </td>
-                    <td className={t.td}>
+                    <td className={`${t.td} align-middle`}>
                       {ultimo ? (
                         <Link href={`/diagnosticos/${ultimo.id}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 hover:text-marca-700">
                           <span>{formatarPeriodo(ultimo.periodo_inicio, ultimo.periodo_fim)}</span>

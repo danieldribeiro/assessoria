@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { BotaoAcao, BotaoExcluir, SeletorImediato } from "@/components/controles";
 import { CamposSolicitacao } from "@/components/formularios";
 import { PainelLateral } from "@/components/painel-lateral";
@@ -37,7 +38,12 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
             )}
             <PainelLateral
               titulo="Nova solicitação"
-              gatilho="+ Item"
+              gatilho={
+            <>
+              <Plus />
+              Novo item
+            </>
+          }
               classeGatilho={classeBotao("primario")}
               acao={salvarSolicitacao.bind(null, d.id, null)}
             >

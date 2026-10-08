@@ -37,7 +37,7 @@ export function Avisos() {
           role={a.tipo === "erro" ? "alert" : "status"}
           className={cx(
             "aviso-entrada flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg",
-            a.tipo === "erro" ? "bg-red-600 text-white" : "bg-slate-900 text-white",
+            a.tipo === "erro" ? "bg-red-600 text-white" : "bg-zinc-900 text-white ring-1 ring-white/10",
           )}
         >
           <span aria-hidden>{a.tipo === "erro" ? "!" : "✓"}</span>

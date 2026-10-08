@@ -40,7 +40,7 @@ export function AbaVisaoGeral({ d }: { d: DiagnosticoCompleto }) {
               </Campo>
             </PainelLateral>
           </CabecalhoCartao>
-          <div className="space-y-5 px-4 py-4">
+          <div className="space-y-5 px-5 py-5">
             <div>
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Situação atual</h3>
               <Texto texto={d.situacao_atual} vazio="Ainda não escrita. Vai para o início do relatório final." />
@@ -80,7 +80,7 @@ export function AbaVisaoGeral({ d }: { d: DiagnosticoCompleto }) {
           ) : (
             <ul className="divide-y divide-slate-100">
               {acoes.map((a) => (
-                <li key={a.id} className="px-4 py-3">
+                <li key={a.id} className="px-5 py-3">
                   <div className="text-sm text-slate-900">{a.acao}</div>
                   <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
                     <EtiquetaStatus status={a.status} />
@@ -97,7 +97,7 @@ export function AbaVisaoGeral({ d }: { d: DiagnosticoCompleto }) {
 
         <Cartao>
           <CabecalhoCartao titulo="Observações internas" />
-          <div className="px-4 py-3">
+          <div className="px-5 py-3">
             <Texto texto={d.observacoes} vazio="Nenhuma. Edite o diagnóstico para registrar." />
           </div>
         </Cartao>
@@ -129,7 +129,7 @@ function ListaDestaques({
       ) : (
         <ul className="divide-y divide-slate-100">
           {itens.map((i) => (
-            <li key={i.id} className="flex items-start gap-2 px-4 py-2.5">
+            <li key={i.id} className="flex items-start gap-2 px-5 py-2.5">
               <EtiquetaPrioridade prioridade={i.prioridade} />
               <span className="text-sm text-slate-800">{i.titulo}</span>
             </li>

@@ -1,6 +1,18 @@
+import {
+  Activity,
+  CalendarClock,
+  ChartColumn,
+  FolderOpen,
+  Hourglass,
+  LayoutDashboard,
+  Lightbulb,
+  ListChecks,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { EtiquetaPrioridade, EtiquetaStatus } from "@/components/etiquetas";
-import { CabecalhoCartao, CabecalhoPagina, Cartao, Etiqueta, Vazio, classeTabela as t, cx } from "@/components/ui";
+import { CabecalhoCartao, CabecalhoPagina, Cartao, Etiqueta, Vazio, cx, iniciais } from "@/components/ui";
 import { porPrioridade, type Prioridade } from "@/lib/dominio";
 import { atrasada, diasUteisAte, formatarData, formatarPeriodo } from "@/lib/datas";
 import { resumoColeta } from "@/lib/consultas";
@@ -93,21 +105,77 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
   const pendentes = (acoes.data ?? []) as unknown as AcaoLinha[];
   const atrasadas = pendentes.filter((a) => atrasada(a.prazo, a.status)).length;
 
-  const numeros: { rotulo: string; valor: number; href: string; filtro?: Filtro; alerta?: boolean }[] = [
-    { rotulo: "Em andamento", valor: lista.length, href: "/", filtro: "todos" },
+  const dataHoje = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date());
+
+  const coletaTotal = lista.reduce(
+    (acc, d) => {
+      const c = resumoColeta(d.solicitacoes);
+      return { recebidos: acc.recebidos + c.recebidos, total: acc.total + c.total, faltam: acc.faltam + c.faltam };
+    },
+    { recebidos: 0, total: 0, faltam: 0 },
+  );
+  const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+  const aguardando = lista.filter(FILTROS.aguardando.teste);
+  const proximos = lista.filter(proximoDoPrazo);
+  const proximo = proximos[0];
+
+  const numeros: {
+    rotulo: string;
+    valor: number;
+    filtro: Filtro;
+    icone: LucideIcon;
+    cor: string;
+    barra?: { rotulo: string; status: string; pct: number; cor: string };
+    rodape: React.ReactNode;
+    alerta?: boolean;
+  }[] = [
+    {
+      rotulo: "Em andamento",
+      valor: lista.length,
+      filtro: "todos",
+      icone: Activity,
+      cor: "bg-marca-50 text-marca-600",
+      barra: { rotulo: "Coleta recebida", status: `${pct(coletaTotal.recebidos, coletaTotal.total)}%`, pct: pct(coletaTotal.recebidos, coletaTotal.total), cor: "bg-emerald-500" },
+      rodape: `${coletaTotal.recebidos} de ${coletaTotal.total} itens recebidos`,
+    },
     {
       rotulo: "Aguardando informações",
-      valor: lista.filter(FILTROS.aguardando.teste).length,
-      href: "/?filtro=aguardando",
+      valor: aguardando.length,
       filtro: "aguardando",
+      icone: Hourglass,
+      cor: "bg-amber-50 text-amber-600",
+      barra: { rotulo: "Dos diagnósticos", status: aguardando.length ? "Cobrar cliente" : "Em dia", pct: pct(aguardando.length, lista.length), cor: "bg-amber-500" },
+      rodape: `${coletaTotal.faltam} ${coletaTotal.faltam === 1 ? "item faltando" : "itens faltando"} no total`,
     },
-    { rotulo: "Em análise", valor: lista.filter(FILTROS.analise.teste).length, href: "/?filtro=analise", filtro: "analise" },
+    {
+      rotulo: "Em análise",
+      valor: lista.filter(FILTROS.analise.teste).length,
+      filtro: "analise",
+      icone: ChartColumn,
+      cor: "bg-violet-50 text-violet-600",
+      barra: { rotulo: "Dos diagnósticos", status: "", pct: pct(lista.filter(FILTROS.analise.teste).length, lista.length), cor: "bg-violet-500" },
+      rodape: `${problemas.length} ${problemas.length === 1 ? "problema prioritário" : "problemas prioritários"}`,
+    },
     {
       rotulo: "Próximos do prazo",
-      valor: lista.filter(proximoDoPrazo).length,
-      href: "/?filtro=prazo",
+      valor: proximos.length,
       filtro: "prazo",
-      alerta: lista.some(proximoDoPrazo),
+      icone: CalendarClock,
+      cor: "bg-rose-50 text-rose-600",
+      alerta: proximos.length > 0,
+      rodape: proximo ? (
+        <>
+          Próxima: <span className="font-medium text-slate-700">{formatarData(proximo.data_prevista)}</span> ·{" "}
+          {proximo.empresa.nome}
+        </>
+      ) : (
+        "Nenhuma entrega nos próximos 2 dias úteis"
+      ),
     },
   ];
 
@@ -115,151 +183,193 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
 
   return (
     <>
-      <CabecalhoPagina titulo="Painel" />
+      <CabecalhoPagina
+        titulo="Painel"
+        icone={<LayoutDashboard />}
+        subtitulo={
+          <>
+            Acompanhe os diagnósticos em andamento · <span className="inline-block first-letter:uppercase">{dataHoje}</span>
+          </>
+        }
+      />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {numeros.map((n) => (
-          <Link
-            key={n.rotulo}
-            href={n.href}
-            className={cx(
-              "rounded-lg border bg-white p-4 shadow-sm transition-colors hover:border-marca-600",
-              n.filtro && n.filtro === filtro ? "border-marca-600 ring-2 ring-marca-100" : "border-slate-200",
-            )}
-          >
-            <div className="text-xs font-medium text-slate-500">{n.rotulo}</div>
-            <div className={cx("mt-1 text-2xl font-semibold", n.alerta ? "text-amber-600" : "text-slate-900")}>
-              {n.valor}
-            </div>
-          </Link>
-        ))}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {numeros.map((n) => {
+          const ativo = n.filtro === filtro;
+          return (
+            <Link
+              key={n.rotulo}
+              href={n.filtro === "todos" ? "/" : `/?filtro=${n.filtro}`}
+              aria-current={ativo ? "true" : undefined}
+              className={cx(
+                "group flex flex-col rounded-2xl border bg-superficie p-4 shadow-xs transition-all hover:shadow-sm sm:p-6",
+                ativo
+                  ? "border-marca-500 ring-3 ring-marca-100"
+                  : n.alerta
+                    ? "border-rose-200 hover:border-rose-300"
+                    : "border-slate-200/80 hover:border-slate-300",
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm font-medium text-slate-600">{n.rotulo}</span>
+                <span className={cx("hidden size-9 shrink-0 items-center justify-center rounded-full sm:flex", n.cor)}>
+                  <n.icone className="size-4" />
+                </span>
+              </div>
+              <div className="mt-2 text-3xl font-bold tracking-tight text-slate-900 tabular-nums">{n.valor}</div>
+              <div className="mt-auto pt-4">
+                {n.barra && (
+                  <div className="mb-2 hidden sm:block">
+                    <div className="mb-1.5 flex justify-between text-xs text-slate-500">
+                      <span>{n.barra.rotulo}</span>
+                      <span className="font-medium text-slate-700">{n.barra.status || `${n.barra.pct}%`}</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div className={cx("h-full rounded-full", n.barra.cor)} style={{ width: `${n.barra.pct}%` }} />
+                    </div>
+                  </div>
+                )}
+                <div className="text-xs text-slate-500">{n.rodape}</div>
+              </div>
+            </Link>
+          );
+        })}
       </div>
 
-      <Cartao className="mb-6 overflow-hidden">
-        <CabecalhoCartao titulo={FILTROS[filtro].rotulo} contagem={filtrados.length}>
-          {filtro !== "todos" && (
-            <Link href="/" className="text-xs text-marca-700 hover:underline">
-              Ver todos
-            </Link>
-          )}
-        </CabecalhoCartao>
-        {filtrados.length === 0 ? (
-          <Vazio>
-            {filtro === "todos" ? (
-              <>
-                Nenhum diagnóstico em andamento. Para começar, abra uma{" "}
-                <Link href="/empresas" className="font-medium text-marca-700 hover:underline">
-                  empresa
-                </Link>{" "}
-                e crie um diagnóstico.
-              </>
-            ) : (
-              "Nenhum diagnóstico nesta situação."
+      <div className="grid gap-6 lg:grid-cols-5">
+        <Cartao className="overflow-hidden lg:col-span-3">
+          <CabecalhoCartao titulo={FILTROS[filtro].rotulo} contagem={filtrados.length} icone={<FolderOpen />}>
+            {filtro !== "todos" && (
+              <Link href="/" className="text-xs font-medium text-marca-700 hover:underline">
+                Limpar filtro
+              </Link>
             )}
-          </Vazio>
-        ) : (
-          <table className={t.tabela}>
-            <thead className={t.cabeca}>
-              <tr>
-                <th className={t.th}>Empresa</th>
-                <th className={t.th}>Status</th>
-                <th className={`${t.th} hidden md:table-cell`}>Responsável</th>
-                <th className={`${t.th} hidden sm:table-cell`}>Coleta</th>
-                <th className={t.th}>Entrega</th>
-              </tr>
-            </thead>
-            <tbody>
+          </CabecalhoCartao>
+          {filtrados.length === 0 ? (
+            <Vazio icone={<FolderOpen />}>
+              {filtro === "todos" ? (
+                <>
+                  Nenhum diagnóstico em andamento. Para começar, abra uma{" "}
+                  <Link href="/empresas" className="font-medium text-marca-700 hover:underline">
+                    empresa
+                  </Link>{" "}
+                  e crie um diagnóstico.
+                </>
+              ) : (
+                "Nenhum diagnóstico nesta situação."
+              )}
+            </Vazio>
+          ) : (
+            <ul className="divide-y divide-slate-100">
               {filtrados.map((d) => {
                 const c = resumoColeta(d.solicitacoes);
+                const pct = c.total ? Math.round((c.recebidos / c.total) * 100) : 0;
                 const dias = d.data_prevista ? diasUteisAte(d.data_prevista) : null;
                 return (
-                  <tr
-                    key={d.id}
-                    className={cx(
-                      t.linha,
-                      dias !== null && dias < 0 && "bg-red-50/60",
-                      dias !== null && dias >= 0 && dias <= 2 && "bg-amber-50/60",
-                    )}
-                  >
-                    <td className={t.td}>
-                      <Link href={`/diagnosticos/${d.id}`} className="font-medium text-slate-900 hover:text-marca-700">
-                        {d.empresa.nome}
-                      </Link>
-                      <div className="text-xs text-slate-500">{formatarPeriodo(d.periodo_inicio, d.periodo_fim)}</div>
-                    </td>
-                    <td className={t.td}>
-                      <EtiquetaStatus status={d.status} />
-                    </td>
-                    <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{d.responsavel?.nome ?? "—"}</td>
-                    <td className={`${t.td} hidden sm:table-cell`}>
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-emerald-500"
-                            style={{ width: `${c.total ? (c.recebidos / c.total) * 100 : 0}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-slate-500">
-                          {c.recebidos}/{c.total}
+                  <li key={d.id}>
+                    <Link
+                      href={`/diagnosticos/${d.id}`}
+                      className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-slate-50/70"
+                    >
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-600">
+                        {iniciais(d.empresa.nome)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-sm font-medium text-slate-900">{d.empresa.nome}</span>
+                          <EtiquetaStatus status={d.status} />
                         </span>
-                      </div>
-                    </td>
-                    <td className={t.td}>
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-slate-700">{formatarData(d.data_prevista)}</span>
-                      {dias !== null && dias < 0 && (
-                        <Etiqueta tom="vermelho" >
-                          atrasado
-                        </Etiqueta>
-                      )}
-                      {dias !== null && dias >= 0 && dias <= 2 && (
-                        <Etiqueta tom="ambar" >
-                          {dias === 0 ? "hoje" : `${dias} d.u.`}
-                        </Etiqueta>
-                      )}
-                      </div>
-                    </td>
-                  </tr>
+                        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                          <span>{formatarPeriodo(d.periodo_inicio, d.periodo_fim)}</span>
+                          {d.responsavel && <span>{d.responsavel.nome}</span>}
+                          <span className="flex items-center gap-1.5">
+                            <span className="h-1 w-14 overflow-hidden rounded-full bg-slate-100">
+                              <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                            </span>
+                            coleta {c.recebidos}/{c.total}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block text-xs text-slate-500">Entrega</span>
+                        <span
+                          className={cx(
+                            "block text-sm font-medium tabular-nums",
+                            dias !== null && dias < 0
+                              ? "text-red-600"
+                              : dias !== null && dias <= 2
+                                ? "text-amber-600"
+                                : "text-slate-700",
+                          )}
+                        >
+                          {dias !== null && dias < 0 ? "atrasado" : formatarData(d.data_prevista)}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
                 );
               })}
-            </tbody>
-          </table>
-        )}
-      </Cartao>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <ListaItens titulo="Problemas prioritários" itens={problemas} aba="achados" vazio="Nenhum problema de prioridade alta em aberto." />
-        <ListaItens
-          titulo="Oportunidades prioritárias"
-          itens={oportunidadesAltas}
-          aba="oportunidades"
-          vazio="Nenhuma oportunidade de prioridade alta em aberto."
-        />
-        <Cartao>
-          <CabecalhoCartao titulo="Ações pendentes" contagem={pendentes.length}>
-            {atrasadas > 0 && <Etiqueta tom="vermelho">{atrasadas} atrasada{atrasadas > 1 ? "s" : ""}</Etiqueta>}
-          </CabecalhoCartao>
-          {pendentes.length === 0 ? (
-            <Vazio>Nenhuma ação pendente.</Vazio>
-          ) : (
-            <ul className="max-h-[28rem] divide-y divide-slate-100 overflow-y-auto">
-              {pendentes.map((a) => (
-                <li key={a.id}>
-                  <Link href={`/diagnosticos/${a.diagnostico.id}?aba=plano`} className="block px-4 py-2.5 hover:bg-slate-50">
-                    <div className="text-sm text-slate-900">{a.acao}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-                      <span>{a.diagnostico.empresa.nome}</span>
-                      <span className={cx(atrasada(a.prazo, a.status) && "font-medium text-red-600")}>
-                        · {formatarData(a.prazo)}
-                      </span>
-                      {a.responsavel && <span>· {a.responsavel}</span>}
-                    </div>
-                  </Link>
-                </li>
-              ))}
             </ul>
           )}
         </Cartao>
+
+        <Cartao className="overflow-hidden lg:col-span-2">
+          <CabecalhoCartao titulo="Ações pendentes" contagem={pendentes.length} icone={<ListChecks />}>
+            {atrasadas > 0 && <Etiqueta tom="vermelho">{atrasadas} atrasada{atrasadas > 1 ? "s" : ""}</Etiqueta>}
+          </CabecalhoCartao>
+          {pendentes.length === 0 ? (
+            <Vazio icone={<ListChecks />}>Nenhuma ação pendente.</Vazio>
+          ) : (
+            <ul className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto">
+              {pendentes.map((a) => {
+                const atrasou = atrasada(a.prazo, a.status);
+                return (
+                  <li key={a.id}>
+                    <Link
+                      href={`/diagnosticos/${a.diagnostico.id}?aba=plano`}
+                      className="flex gap-3 px-5 py-3 transition-colors hover:bg-slate-50/70"
+                    >
+                      <span
+                        aria-hidden
+                        className={cx(
+                          "mt-1.5 size-2 shrink-0 rounded-full",
+                          atrasou ? "bg-red-500" : a.status === "Em andamento" ? "bg-marca-500" : "bg-slate-300",
+                        )}
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm text-slate-900">{a.acao}</span>
+                        <span className="mt-0.5 block text-xs text-slate-500">
+                          {a.diagnostico.empresa.nome}
+                          {a.prazo && (
+                            <span className={cx(atrasou && "font-medium text-red-600")}> · {formatarData(a.prazo)}</span>
+                          )}
+                          {a.responsavel && <> · {a.responsavel}</>}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Cartao>
+
+        <div className="grid gap-6 md:grid-cols-2 lg:col-span-5">
+          <ListaItens
+            titulo="Problemas prioritários"
+            icone={<TriangleAlert />}
+            itens={problemas}
+            aba="achados"
+            vazio="Nenhum problema de prioridade alta em aberto."
+          />
+          <ListaItens
+            titulo="Oportunidades prioritárias"
+            icone={<Lightbulb />}
+            itens={oportunidadesAltas}
+            aba="oportunidades"
+            vazio="Nenhuma oportunidade de prioridade alta em aberto."
+          />
+        </div>
       </div>
     </>
   );
@@ -267,27 +377,32 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
 
 function ListaItens({
   titulo,
+  icone,
   itens,
   aba,
   vazio,
 }: {
   titulo: string;
+  icone: React.ReactNode;
   itens: ItemLinha[];
   aba: string;
   vazio: string;
 }) {
   return (
-    <Cartao>
-      <CabecalhoCartao titulo={titulo} contagem={itens.length} />
+    <Cartao className="overflow-hidden">
+      <CabecalhoCartao titulo={titulo} contagem={itens.length} icone={icone} />
       {itens.length === 0 ? (
-        <Vazio>{vazio}</Vazio>
+        <Vazio icone={icone}>{vazio}</Vazio>
       ) : (
-        <ul className="max-h-[28rem] divide-y divide-slate-100 overflow-y-auto">
+        <ul className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto">
           {itens.map((i) => (
             <li key={i.id}>
-              <Link href={`/diagnosticos/${i.diagnostico.id}?aba=${aba}`} className="flex items-start gap-2 px-4 py-2.5 hover:bg-slate-50">
+              <Link
+                href={`/diagnosticos/${i.diagnostico.id}?aba=${aba}`}
+                className="flex items-start gap-3 px-5 py-3 transition-colors hover:bg-slate-50/70"
+              >
                 <EtiquetaPrioridade prioridade={i.prioridade} />
-                <span>
+                <span className="min-w-0">
                   <span className="block text-sm text-slate-900">{i.titulo}</span>
                   <span className="block text-xs text-slate-500">
                     {i.diagnostico.empresa.nome} · {i.status.toLowerCase()}
@@ -301,4 +416,3 @@ function ListaItens({
     </Cartao>
   );
 }
-

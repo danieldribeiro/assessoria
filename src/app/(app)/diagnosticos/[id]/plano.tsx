@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { BotaoExcluir, SeletorImediato } from "@/components/controles";
 import { EtiquetaPrioridade } from "@/components/etiquetas";
 import { CamposAcao } from "@/components/formularios";
@@ -31,7 +32,12 @@ export function AbaPlano({ d }: { d: DiagnosticoCompleto }) {
         </div>
         <PainelLateral
           titulo="Nova ação"
-          gatilho="+ Ação"
+          gatilho={
+            <>
+              <Plus />
+              Nova ação
+            </>
+          }
           classeGatilho={classeBotao("primario")}
           acao={salvarAcao.bind(null, d.id, null)}
         >

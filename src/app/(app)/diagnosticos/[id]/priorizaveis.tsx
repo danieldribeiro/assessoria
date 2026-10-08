@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { BotaoExcluir, SeletorImediato } from "@/components/controles";
 import { EtiquetaPrioridade } from "@/components/etiquetas";
 import { CamposAcao, CamposAchado, CamposOportunidade } from "@/components/formularios";
@@ -63,7 +64,12 @@ export function AbaAchados({ d }: { d: DiagnosticoCompleto }) {
         <ResumoPrioridades itens={d.achados} />
         <PainelLateral
           titulo="Novo achado"
-          gatilho="+ Achado"
+          gatilho={
+            <>
+              <Plus />
+              Novo achado
+            </>
+          }
           classeGatilho={classeBotao("primario")}
           acao={salvarAchado.bind(null, d.id, null)}
         >
@@ -98,7 +104,12 @@ export function AbaAchados({ d }: { d: DiagnosticoCompleto }) {
               />
               <PainelLateral
                 titulo="Nova ação"
-                gatilho="+ Ação"
+                gatilho={
+            <>
+              <Plus />
+              Ação
+            </>
+          }
                 classeGatilho={classeBotao("secundario", true)}
                 acao={salvarAcao.bind(null, d.id, null)}
                 aviso="Ação criada no plano"
@@ -144,7 +155,12 @@ export function AbaOportunidades({ d }: { d: DiagnosticoCompleto }) {
         <ResumoPrioridades itens={d.oportunidades} />
         <PainelLateral
           titulo="Nova oportunidade"
-          gatilho="+ Oportunidade"
+          gatilho={
+            <>
+              <Plus />
+              Nova oportunidade
+            </>
+          }
           classeGatilho={classeBotao("primario")}
           acao={salvarOportunidade.bind(null, d.id, null)}
         >
@@ -179,7 +195,12 @@ export function AbaOportunidades({ d }: { d: DiagnosticoCompleto }) {
               />
               <PainelLateral
                 titulo="Nova ação"
-                gatilho="+ Ação"
+                gatilho={
+            <>
+              <Plus />
+              Ação
+            </>
+          }
                 classeGatilho={classeBotao("secundario", true)}
                 acao={salvarAcao.bind(null, d.id, null)}
                 aviso="Ação criada no plano"
