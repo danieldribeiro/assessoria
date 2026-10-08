@@ -49,7 +49,53 @@ export function porPrioridade<T extends { prioridade: string }>(a: T, b: T) {
   );
 }
 
-export type Perfil = { id: string; nome: string; email: string };
+export type Perfil = {
+  id: string;
+  nome: string;
+  email: string;
+  cargo?: string | null;
+  telefone?: string | null;
+  foto_url?: string | null;
+};
+
+export const REGIMES_TRIBUTARIOS = ["Simples Nacional", "MEI", "Lucro Presumido", "Lucro Real"] as const;
+export const UFS = [
+  "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA",
+  "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
+] as const;
+
+// Campos de cadastro usados na nota fiscal, iguais para a assessoria e para as empresas.
+export const CAMPOS_CADASTRO = [
+  "razao_social",
+  "cnpj",
+  "inscricao_municipal",
+  "inscricao_estadual",
+  "email",
+  "telefone",
+  "cep",
+  "logradouro",
+  "numero",
+  "complemento",
+  "bairro",
+  "cidade",
+  "uf",
+  "codigo_municipio",
+] as const;
+export type Cadastro = Record<(typeof CAMPOS_CADASTRO)[number], string | null> & { logo_url: string | null };
+
+export type Assessoria = Cadastro & {
+  nome_fantasia: string | null;
+  regime_tributario: string | null;
+  site: string | null;
+};
+
+export function enderecoEmLinhas(c: Partial<Cadastro>) {
+  const rua = [c.logradouro, c.numero].filter(Boolean).join(", ");
+  const linha1 = [rua, c.complemento].filter(Boolean).join(" · ");
+  const cidade = [c.cidade, c.uf].filter(Boolean).join("/");
+  const linha2 = [c.bairro, cidade, c.cep && `CEP ${c.cep}`].filter(Boolean).join(" · ");
+  return [linha1, linha2].filter(Boolean);
+}
 
 // Quem cuida de cada área no diagnóstico: { Financeiro: perfilId, ... }.
 export type ResponsaveisArea = Partial<Record<Categoria, string>>;
@@ -62,10 +108,9 @@ export function responsavelDoItem(
   return item.responsavel_id ?? areas?.[item.categoria as Categoria] ?? null;
 }
 
-export type Empresa = {
+export type Empresa = Cadastro & {
   id: string;
   nome: string;
-  cnpj: string | null;
   segmento: string;
   observacoes: string | null;
 };

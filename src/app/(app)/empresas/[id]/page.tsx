@@ -1,4 +1,4 @@
-import { Pencil, Plus } from "lucide-react";
+import { FileText, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BotaoExcluir } from "@/components/controles";
@@ -10,11 +10,12 @@ import {
   CabecalhoPagina,
   Cartao,
   Etiqueta,
+  LogoEmpresa,
   Vazio,
   classeBotao,
   classeTabela as t,
 } from "@/components/ui";
-import type { Contato, Diagnostico, Empresa } from "@/lib/dominio";
+import { enderecoEmLinhas, type Contato, type Diagnostico, type Empresa } from "@/lib/dominio";
 import { formatarData, formatarPeriodo } from "@/lib/datas";
 import { listarEquipe, ultimasAreas, usuarioAtual } from "@/lib/consultas";
 import { criarCliente } from "@/lib/supabase/server";
@@ -52,7 +53,12 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
         </Link>
       </nav>
       <CabecalhoPagina
-        titulo={empresa.nome}
+        titulo={
+          <>
+            <LogoEmpresa nome={empresa.nome} logo={empresa.logo_url} largo className="size-11 text-base" />
+            {empresa.nome}
+          </>
+        }
         subtitulo={[empresa.segmento, empresa.cnpj].filter(Boolean).join(" · ")}
       >
         <PainelLateral
@@ -115,7 +121,10 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
                   {empresa.diagnosticos.map((d) => (
                     <tr key={d.id} className={t.linha}>
                       <td className={t.td}>
-                        <Link href={`/diagnosticos/${d.id}`} className="font-medium text-slate-900 hover:text-marca-700">
+                        <Link
+                          href={`/diagnosticos/${d.id}`}
+                          className="font-medium text-slate-900 hover:text-marca-700"
+                        >
                           {formatarPeriodo(d.periodo_inicio, d.periodo_fim)}
                         </Link>
                       </td>
@@ -140,57 +149,111 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
           )}
         </div>
 
-        <Cartao className="self-start">
-          <CabecalhoCartao titulo="Contatos" contagem={empresa.contatos.length}>
-            <PainelLateral
-              titulo="Novo contato"
-              gatilho={
-            <>
-              <Plus />
-              Adicionar
-            </>
-          }
-              classeGatilho={classeBotao("fantasma", true)}
-              acao={salvarContato.bind(null, empresa.id, null)}
-            >
-              <CamposContato />
-            </PainelLateral>
-          </CabecalhoCartao>
-          {empresa.contatos.length === 0 ? (
-            <Vazio>Nenhum contato. Cadastre ao menos o responsável pelas informações.</Vazio>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {empresa.contatos.map((c) => (
-                <li key={c.id}>
-                  <PainelLateral
-                    titulo="Editar contato"
-                    classeGatilho="block w-full px-5 py-3 text-left hover:bg-slate-50"
-                    acao={salvarContato.bind(null, empresa.id, c.id)}
-                    rodape={
-                      <BotaoExcluir acao={excluirContato.bind(null, c.id)} pergunta={`Excluir o contato ${c.nome}?`} />
-                    }
-                    gatilho={
-                      <>
-                        <span className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-900">{c.nome}</span>
-                          {c.responsavel && <Etiqueta tom="azul">Responsável</Etiqueta>}
-                        </span>
-                        {c.cargo && <span className="block text-xs text-slate-500">{c.cargo}</span>}
-                        <span className="mt-1 block space-y-0.5 text-xs text-slate-600">
-                          {c.telefone && <span className="block">{c.telefone}</span>}
-                          {c.email && <span className="block">{c.email}</span>}
-                        </span>
-                      </>
-                    }
-                  >
-                    <CamposContato contato={c} />
-                  </PainelLateral>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Cartao>
+        <div className="space-y-6 self-start">
+          <DadosCadastrais empresa={empresa} />
+          <Cartao>
+            <CabecalhoCartao titulo="Contatos" contagem={empresa.contatos.length}>
+              <PainelLateral
+                titulo="Novo contato"
+                gatilho={
+                  <>
+                    <Plus />
+                    Adicionar
+                  </>
+                }
+                classeGatilho={classeBotao("fantasma", true)}
+                acao={salvarContato.bind(null, empresa.id, null)}
+              >
+                <CamposContato />
+              </PainelLateral>
+            </CabecalhoCartao>
+            {empresa.contatos.length === 0 ? (
+              <Vazio>Nenhum contato. Cadastre ao menos o responsável pelas informações.</Vazio>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {empresa.contatos.map((c) => (
+                  <li key={c.id}>
+                    <PainelLateral
+                      titulo="Editar contato"
+                      classeGatilho="block w-full px-5 py-3 text-left hover:bg-slate-50"
+                      acao={salvarContato.bind(null, empresa.id, c.id)}
+                      rodape={
+                        <BotaoExcluir
+                          acao={excluirContato.bind(null, c.id)}
+                          pergunta={`Excluir o contato ${c.nome}?`}
+                        />
+                      }
+                      gatilho={
+                        <>
+                          <span className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-900">{c.nome}</span>
+                            {c.responsavel && <Etiqueta tom="azul">Responsável</Etiqueta>}
+                          </span>
+                          {c.cargo && <span className="block text-xs text-slate-500">{c.cargo}</span>}
+                          <span className="mt-1 block space-y-0.5 text-xs text-slate-600">
+                            {c.telefone && <span className="block">{c.telefone}</span>}
+                            {c.email && <span className="block">{c.email}</span>}
+                          </span>
+                        </>
+                      }
+                    >
+                      <CamposContato contato={c} />
+                    </PainelLateral>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Cartao>
+        </div>
       </div>
     </>
+  );
+}
+
+// Razão social, inscrições, endereço e e-mail: o que a nota fiscal pede.
+function DadosCadastrais({ empresa }: { empresa: Empresa }) {
+  const endereco = enderecoEmLinhas(empresa);
+  const linhas = [
+    ["Razão social", empresa.razao_social],
+    ["CNPJ", empresa.cnpj],
+    ["Inscrição municipal", empresa.inscricao_municipal],
+    ["Inscrição estadual", empresa.inscricao_estadual],
+    ["E-mail para notas", empresa.email],
+    ["Telefone", empresa.telefone],
+  ].filter((l): l is [string, string] => Boolean(l[1]));
+  const faltam = [
+    !empresa.razao_social && "razão social",
+    !empresa.cnpj && "CNPJ",
+    !endereco.length && "endereço",
+    !empresa.email && "e-mail",
+  ].filter(Boolean);
+
+  return (
+    <Cartao>
+      <CabecalhoCartao titulo="Dados cadastrais" icone={<FileText />} />
+      <dl className="space-y-2.5 px-5 py-4 text-sm">
+        {linhas.map(([rotulo, valor]) => (
+          <div key={rotulo}>
+            <dt className="text-xs text-slate-500">{rotulo}</dt>
+            <dd className="break-words text-slate-900">{valor}</dd>
+          </div>
+        ))}
+        {endereco.length > 0 && (
+          <div>
+            <dt className="text-xs text-slate-500">Endereço</dt>
+            {endereco.map((l) => (
+              <dd key={l} className="text-slate-900">
+                {l}
+              </dd>
+            ))}
+          </div>
+        )}
+      </dl>
+      {faltam.length > 0 && (
+        <p className="border-t border-slate-100 px-5 py-3 text-xs text-amber-700">
+          Falta {faltam.join(", ").replace(/, ([^,]*)$/, " e $1")} para emitir nota. Use “Editar”.
+        </p>
+      )}
+    </Cartao>
   );
 }

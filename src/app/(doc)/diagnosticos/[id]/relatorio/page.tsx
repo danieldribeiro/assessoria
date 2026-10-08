@@ -4,7 +4,7 @@ import { BotaoImprimir } from "@/components/botao-imprimir";
 import { EtiquetaPrioridade } from "@/components/etiquetas";
 import { NOTAS, type Achado, type Oportunidade } from "@/lib/dominio";
 import { formatarData, formatarPeriodo, formatarValor, hoje } from "@/lib/datas";
-import { agruparPorCategoria, carregarDiagnostico } from "@/lib/consultas";
+import { agruparPorCategoria, carregarAssessoria, carregarDiagnostico } from "@/lib/consultas";
 import { tituloRelacionado } from "@/app/(app)/diagnosticos/[id]/plano";
 
 export async function generateMetadata({ params }: PageProps<"/diagnosticos/[id]/relatorio">) {
@@ -92,7 +92,8 @@ function Matriz({ itens }: { itens: { codigo: string; item: Achado | Oportunidad
 
 export default async function Relatorio({ params }: PageProps<"/diagnosticos/[id]/relatorio">) {
   const { id } = await params;
-  const d = await carregarDiagnostico(id);
+  const [d, assessoria] = await Promise.all([carregarDiagnostico(id), carregarAssessoria()]);
+  const nomeAssessoria = assessoria?.nome_fantasia || assessoria?.razao_social;
 
   const problemas = d.achados.filter((a) => a.status !== "Descartado");
   const oportunidades = d.oportunidades.filter((o) => o.status !== "Descartada");
@@ -117,6 +118,20 @@ export default async function Relatorio({ params }: PageProps<"/diagnosticos/[id
 
       <article className="mx-auto my-8 max-w-4xl bg-superficie px-12 py-14 shadow-sm print:my-0 print:max-w-none print:px-0 print:py-0 print:shadow-none">
         <header className="border-b border-slate-200 pb-10">
+          {(assessoria?.logo_url || nomeAssessoria) && (
+            <div className="mb-10 flex items-center justify-between gap-6">
+              {assessoria?.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={assessoria.logo_url} alt={nomeAssessoria ?? ""} className="h-12 max-w-48 object-contain" />
+              ) : (
+                <span className="text-base font-semibold text-slate-900">{nomeAssessoria}</span>
+              )}
+              {d.empresa.logo_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={d.empresa.logo_url} alt={d.empresa.nome} className="h-12 max-w-40 object-contain" />
+              )}
+            </div>
+          )}
           <div className="text-sm font-semibold uppercase tracking-widest text-marca-600">Diagnóstico empresarial</div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">{d.empresa.nome}</h1>
           <dl className="mt-6 grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:grid-cols-4">
@@ -294,6 +309,14 @@ export default async function Relatorio({ params }: PageProps<"/diagnosticos/[id
             </table>
           )}
         </Secao>
+
+        {assessoria?.razao_social && (
+          <footer className="mt-14 border-t border-slate-200 pt-4 text-xs text-slate-500">
+            {[assessoria.razao_social, assessoria.cnpj && `CNPJ ${assessoria.cnpj}`, assessoria.email, assessoria.site]
+              .filter(Boolean)
+              .join(" · ")}
+          </footer>
+        )}
       </article>
     </div>
   );

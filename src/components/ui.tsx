@@ -224,3 +224,35 @@ export function iniciais(nome: string) {
     .join("")
     .toUpperCase();
 }
+
+// Logo da clínica, ou as iniciais quando não há logo.
+// `largo` deixa logos horizontais ocuparem a largura natural (cabeçalho da empresa).
+export function LogoEmpresa({
+  nome,
+  logo,
+  largo,
+  className,
+}: {
+  nome: string;
+  logo?: string | null;
+  largo?: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cx(
+        "flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100 text-sm font-semibold text-slate-600",
+        logo && "bg-white p-0.5 ring-1 ring-slate-200",
+        className,
+        logo && largo && "w-auto! max-w-44 px-2 [&_img]:w-auto!",
+      )}
+    >
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logo} alt="" className="size-full object-contain" />
+      ) : (
+        iniciais(nome)
+      )}
+    </span>
+  );
+}

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { EtiquetaStatus } from "@/components/etiquetas";
 import { CamposEmpresa } from "@/components/formularios";
 import { PainelLateral } from "@/components/painel-lateral";
-import { CabecalhoPagina, Cartao, Vazio, classeBotao, classeInput, classeTabela as t, iniciais } from "@/components/ui";
+import { CabecalhoPagina, Cartao, Vazio, classeBotao, classeInput, classeTabela as t, LogoEmpresa } from "@/components/ui";
 import { formatarPeriodo } from "@/lib/datas";
 import { criarCliente } from "@/lib/supabase/server";
 import { salvarEmpresa } from "@/server/empresas";
@@ -15,6 +15,7 @@ type Linha = {
   nome: string;
   cnpj: string | null;
   segmento: string;
+  logo_url: string | null;
   contatos: { nome: string; responsavel: boolean }[];
   diagnosticos: { id: string; status: string; periodo_inicio: string; periodo_fim: string; data_inicio: string }[];
 };
@@ -26,7 +27,7 @@ export default async function Empresas({ searchParams }: PageProps<"/empresas">)
   const supabase = await criarCliente();
   let consulta = supabase
     .from("empresas")
-    .select("id, nome, cnpj, segmento, contatos(nome, responsavel), diagnosticos(id, status, periodo_inicio, periodo_fim, data_inicio)")
+    .select("id, nome, cnpj, segmento, logo_url, contatos(nome, responsavel), diagnosticos(id, status, periodo_inicio, periodo_fim, data_inicio)")
     .order("nome");
   if (termo) {
     const seguro = termo.replace(/[,()%]/g, " ");
@@ -111,9 +112,11 @@ export default async function Empresas({ searchParams }: PageProps<"/empresas">)
                   <tr key={e.id} className={t.linha}>
                     <td className={t.td}>
                       <Link href={`/empresas/${e.id}`} className="group flex items-center gap-3">
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-600 group-hover:bg-marca-50 group-hover:text-marca-700">
-                          {iniciais(e.nome)}
-                        </span>
+                        <LogoEmpresa
+                          nome={e.nome}
+                          logo={e.logo_url}
+                          className="group-hover:bg-marca-50 group-hover:text-marca-700"
+                        />
                         <span className="min-w-0">
                           <span className="block font-medium text-slate-900 group-hover:text-marca-700">{e.nome}</span>
                           {e.cnpj && <span className="block text-xs text-slate-500">{e.cnpj}</span>}

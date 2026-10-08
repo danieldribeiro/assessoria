@@ -2,20 +2,27 @@
 
 import { redirect } from "next/navigation";
 import { criarCliente } from "@/lib/supabase/server";
-import { atualizarTelas, exigir, falha, marcado, texto } from "@/server/util";
+import { atualizarTelas, cadastro, exigir, falha, imagemEnviada, marcado, texto } from "@/server/util";
 
 export async function salvarEmpresa(id: string | null, dados: FormData) {
   const nome = texto(dados, "nome");
   if (!nome) return { erro: "Informe o nome da empresa." };
 
+  const supabase = await criarCliente();
+  let logo_url;
+  try {
+    logo_url = await imagemEnviada(supabase, dados, "logo", "empresas");
+  } catch (e) {
+    return { erro: (e as Error).message };
+  }
   const registro = {
     nome,
-    cnpj: texto(dados, "cnpj"),
+    ...cadastro(dados),
     segmento: texto(dados, "segmento") ?? "Odontologia",
     observacoes: texto(dados, "observacoes"),
+    ...(logo_url !== undefined && { logo_url }),
   };
 
-  const supabase = await criarCliente();
   if (id) {
     const { error } = await supabase.from("empresas").update(registro).eq("id", id);
     if (error) return falha(error);
