@@ -19,9 +19,41 @@ import {
   type Indicador,
   type Oportunidade,
   type Perfil,
+  type ResponsaveisArea,
   type Solicitacao,
 } from "@/lib/dominio";
 import { hoje, somarDiasUteis } from "@/lib/datas";
+
+// Responsável do item: em branco, segue o responsável da área no diagnóstico.
+function CampoResponsavel({
+  equipe,
+  areas,
+  valor,
+}: {
+  equipe: Perfil[];
+  areas: ResponsaveisArea;
+  valor?: string | null;
+}) {
+  const nome = (id?: string) => equipe.find((p) => p.id === id)?.nome.split(" ")[0];
+  const resumo = CATEGORIAS.filter((c) => areas[c])
+    .map((c) => `${c}: ${nome(areas[c])}`)
+    .join(" · ");
+  return (
+    <Campo
+      rotulo="Responsável"
+      dica={resumo ? `Em branco, segue a área (${resumo})` : "Em branco, segue o responsável da área"}
+    >
+      <Selecao
+        name="responsavel_id"
+        vazio="Responsável da área"
+        opcoes={equipe.map((p) => ({ valor: p.id, rotulo: p.nome }))}
+        defaultValue={valor ?? ""}
+      />
+    </Campo>
+  );
+}
+
+type Equipe = { equipe: Perfil[]; areas: ResponsaveisArea };
 
 export function CamposEmpresa({ empresa }: { empresa?: Empresa }) {
   return (
@@ -78,11 +110,14 @@ export function CamposDiagnostico({
   diagnostico,
   equipe,
   usuarioId,
+  areasPadrao,
 }: {
   diagnostico?: Diagnostico;
   equipe: Perfil[];
   usuarioId?: string;
+  areasPadrao?: ResponsaveisArea;
 }) {
+  const areas = diagnostico?.responsaveis_area ?? areasPadrao ?? {};
   const inicio = diagnostico?.data_inicio ?? hoje();
   return (
     <>
@@ -119,7 +154,29 @@ export function CamposDiagnostico({
           />
         </Campo>
       </div>
-      <Campo rotulo="Responsável">
+      <fieldset className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <legend className="sr-only">Responsáveis por área</legend>
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Responsáveis por área</p>
+          <p className="text-xs text-slate-500">
+            Cada item de coleta, indicador, achado e oportunidade fica com quem cuida da sua área. Dá para trocar item a
+            item.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {CATEGORIAS.map((c) => (
+            <Campo key={c} rotulo={c}>
+              <Selecao
+                name={`area_${c}`}
+                vazio="—"
+                opcoes={equipe.map((p) => ({ valor: p.id, rotulo: p.nome }))}
+                defaultValue={areas[c] ?? ""}
+              />
+            </Campo>
+          ))}
+        </div>
+      </fieldset>
+      <Campo rotulo="Coordenação do diagnóstico" dica="Quem responde pelo prazo e pela entrega final">
         <Selecao
           name="responsavel_id"
           vazio="—"
@@ -137,7 +194,7 @@ export function CamposDiagnostico({
   );
 }
 
-export function CamposSolicitacao({ solicitacao }: { solicitacao?: Solicitacao }) {
+export function CamposSolicitacao({ solicitacao, equipe, areas }: { solicitacao?: Solicitacao } & Equipe) {
   return (
     <>
       <Campo rotulo="Item solicitado">
@@ -151,6 +208,7 @@ export function CamposSolicitacao({ solicitacao }: { solicitacao?: Solicitacao }
           <Selecao name="status" opcoes={STATUS_SOLICITACAO} defaultValue={solicitacao?.status} />
         </Campo>
       </div>
+      <CampoResponsavel equipe={equipe} areas={areas} valor={solicitacao?.responsavel_id} />
       <div className="grid grid-cols-2 gap-3">
         <Campo rotulo="Data de solicitação">
           <Entrada type="date" name="data_solicitacao" defaultValue={solicitacao?.data_solicitacao ?? ""} />
@@ -169,7 +227,7 @@ export function CamposSolicitacao({ solicitacao }: { solicitacao?: Solicitacao }
   );
 }
 
-export function CamposIndicador({ indicador }: { indicador?: Indicador }) {
+export function CamposIndicador({ indicador, equipe, areas }: { indicador?: Indicador } & Equipe) {
   return (
     <>
       <Campo rotulo="Indicador">
@@ -196,6 +254,7 @@ export function CamposIndicador({ indicador }: { indicador?: Indicador }) {
           <Entrada name="periodo" defaultValue={indicador?.periodo ?? ""} placeholder="Ex.: média jan–jun/26" />
         </Campo>
       </div>
+      <CampoResponsavel equipe={equipe} areas={areas} valor={indicador?.responsavel_id} />
       <Campo rotulo="Referência" dica="Meta, valor de mercado ou período anterior para comparação">
         <Entrada name="referencia" defaultValue={indicador?.referencia ?? ""} />
       </Campo>
@@ -214,7 +273,7 @@ function CamposPriorizacao({
   return <PriorizacaoAoVivo item={item} />;
 }
 
-export function CamposAchado({ achado }: { achado?: Achado }) {
+export function CamposAchado({ achado, equipe, areas }: { achado?: Achado } & Equipe) {
   return (
     <>
       <Campo rotulo="Título">
@@ -228,6 +287,7 @@ export function CamposAchado({ achado }: { achado?: Achado }) {
           <Selecao name="status" opcoes={STATUS_ACHADO} defaultValue={achado?.status} />
         </Campo>
       </div>
+      <CampoResponsavel equipe={equipe} areas={areas} valor={achado?.responsavel_id} />
       <Campo rotulo="Descrição">
         <AreaTexto name="descricao" defaultValue={achado?.descricao ?? ""} />
       </Campo>
@@ -245,7 +305,7 @@ export function CamposAchado({ achado }: { achado?: Achado }) {
   );
 }
 
-export function CamposOportunidade({ oportunidade }: { oportunidade?: Oportunidade }) {
+export function CamposOportunidade({ oportunidade, equipe, areas }: { oportunidade?: Oportunidade } & Equipe) {
   return (
     <>
       <Campo rotulo="Título">
@@ -259,6 +319,7 @@ export function CamposOportunidade({ oportunidade }: { oportunidade?: Oportunida
           <Selecao name="status" opcoes={STATUS_OPORTUNIDADE} defaultValue={oportunidade?.status} />
         </Campo>
       </div>
+      <CampoResponsavel equipe={equipe} areas={areas} valor={oportunidade?.responsavel_id} />
       <Campo rotulo="Descrição">
         <AreaTexto name="descricao" defaultValue={oportunidade?.descricao ?? ""} />
       </Campo>

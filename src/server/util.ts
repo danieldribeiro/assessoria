@@ -40,3 +40,8 @@ export function falha(error: { message: string } | null) {
 export function exigir(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
+
+// Campo "Responsável" dos itens: vazio = segue o responsável da área.
+export function responsavel(dados: FormData) {
+  return { responsavel_id: texto(dados, "responsavel_id") };
+}

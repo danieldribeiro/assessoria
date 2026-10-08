@@ -14,7 +14,7 @@ Stack: Next.js (App Router) · Supabase (PostgreSQL + Auth) · Tailwind CSS. Hos
 ## Configuração (uma vez)
 
 1. Crie um projeto em [supabase.com](https://supabase.com).
-2. No **SQL Editor** do Supabase, cole e rode o conteúdo de `supabase/migrations/0001_esquema.sql`.
+2. No **SQL Editor** do Supabase, rode em ordem os arquivos de `supabase/migrations/` (`0001_esquema.sql`, `0002_ajustes_seguranca.sql`, `0003_responsaveis.sql`...).
 3. Em **Authentication → Sign In / Providers**, desative **Allow new users to sign up**. Só a equipe acessa.
 4. Em **Authentication → Users → Add user → Create new user**, crie um usuário (e-mail e senha) para cada pessoa da equipe. Marque "Auto Confirm User".
    - Para o nome aparecer certo no sistema, depois de criar rode no SQL Editor:

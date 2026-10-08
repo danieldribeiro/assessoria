@@ -20,9 +20,10 @@ import { BotaoExcluir, SeletorImediato } from "@/components/controles";
 import { CamposDiagnostico } from "@/components/formularios";
 import { PainelLateral } from "@/components/painel-lateral";
 import { Cartao, Etiqueta, LinkBotao, classeBotao, cx, iniciais } from "@/components/ui";
-import { STATUS_DIAGNOSTICO } from "@/lib/dominio";
+import { CATEGORIAS, STATUS_DIAGNOSTICO } from "@/lib/dominio";
+import { AvatarResponsavel } from "@/components/responsaveis";
 import { atrasada, diasUteisAte, formatarData, formatarPeriodo } from "@/lib/datas";
-import { carregarDiagnostico, listarEquipe, resumoColeta } from "@/lib/consultas";
+import { carregarDiagnostico, resumoColeta, usuarioAtual } from "@/lib/consultas";
 import { atualizarDiagnostico, excluirDiagnostico, mudarStatusDiagnostico } from "@/server/diagnosticos";
 import { AbaAchados, AbaOportunidades } from "./priorizaveis";
 import { AbaColeta } from "./coleta";
@@ -41,10 +42,13 @@ export async function generateMetadata({ params }: PageProps<"/diagnosticos/[id]
 
 export default async function PaginaDiagnostico({ params, searchParams }: PageProps<"/diagnosticos/[id]">) {
   const { id } = await params;
-  const { aba: abaParam } = await searchParams;
+  const { aba: abaParam, de: deParam } = await searchParams;
+  const de = typeof deParam === "string" ? deParam : undefined;
   const aba: Aba = ABAS.includes(abaParam as Aba) ? (abaParam as Aba) : "visao";
 
-  const [d, equipe] = await Promise.all([carregarDiagnostico(id), listarEquipe()]);
+  const [d, usuario] = await Promise.all([carregarDiagnostico(id), usuarioAtual()]);
+  const equipe = d.equipe;
+  const filtro = { de, usuarioId: usuario?.id };
   const coleta = resumoColeta(d.solicitacoes);
   const preenchidos = d.indicadores.filter((i) => i.valor !== null).length;
   const achadosAltos = d.achados.filter((a) => a.prioridade === "Alta").length;
@@ -100,7 +104,7 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
   const prazo = d.data_prevista && d.status !== "Concluído" ? diasUteisAte(d.data_prevista) : null;
 
   const meta = [
-    { icone: UserRound, texto: d.responsavel?.nome ?? "Sem responsável" },
+    { icone: UserRound, texto: d.responsavel ? `Coordenação: ${d.responsavel.nome}` : "Sem coordenação" },
     { icone: CalendarDays, texto: `Início ${formatarData(d.data_inicio)}` },
   ];
 
@@ -151,6 +155,16 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
                     <span className="text-slate-400">({prazo} dias úteis)</span>
                   ))}
               </span>
+              {CATEGORIAS.some((c) => d.responsaveis_area[c]) && (
+                <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {CATEGORIAS.filter((c) => d.responsaveis_area[c]).map((c) => (
+                    <span key={c} className="inline-flex items-center gap-1.5">
+                      <AvatarResponsavel perfil={equipe.find((p) => p.id === d.responsaveis_area[c])} className="size-5" />
+                      {c}
+                    </span>
+                  ))}
+                </span>
+              )}
               {d.pasta_url && (
                 <a
                   href={d.pasta_url}
@@ -243,10 +257,10 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
           <AbaVisaoGeral d={d} />
         </>
       )}
-      {aba === "coleta" && <AbaColeta d={d} />}
-      {aba === "analise" && <AbaIndicadores d={d} />}
-      {aba === "achados" && <AbaAchados d={d} />}
-      {aba === "oportunidades" && <AbaOportunidades d={d} />}
+      {aba === "coleta" && <AbaColeta d={d} {...filtro} />}
+      {aba === "analise" && <AbaIndicadores d={d} {...filtro} />}
+      {aba === "achados" && <AbaAchados d={d} {...filtro} />}
+      {aba === "oportunidades" && <AbaOportunidades d={d} {...filtro} />}
       {aba === "plano" && <AbaPlano d={d} />}
     </>
   );

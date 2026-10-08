@@ -2,10 +2,19 @@
 
 import { redirect } from "next/navigation";
 import { criarCliente } from "@/lib/supabase/server";
-import { STATUS_DIAGNOSTICO, type StatusDiagnostico } from "@/lib/dominio";
+import { CATEGORIAS, STATUS_DIAGNOSTICO, type ResponsaveisArea, type StatusDiagnostico } from "@/lib/dominio";
 import { hoje, somarDiasUteis } from "@/lib/datas";
 import { modeloDoSegmento } from "@/lib/modelos";
 import { atualizarTelas, exigir, falha, texto } from "@/server/util";
+
+function areas(dados: FormData) {
+  const mapa: ResponsaveisArea = {};
+  for (const c of CATEGORIAS) {
+    const id = texto(dados, `area_${c}`);
+    if (id) mapa[c] = id;
+  }
+  return mapa;
+}
 
 function periodo(dados: FormData) {
   // Campos <input type="month"> chegam como AAAA-MM.
@@ -39,6 +48,7 @@ export async function criarDiagnostico(empresaId: string, dados: FormData) {
       data_inicio: dataInicio,
       data_prevista: texto(dados, "data_prevista"),
       responsavel_id: texto(dados, "responsavel_id"),
+      responsaveis_area: areas(dados),
       pasta_url: texto(dados, "pasta_url"),
       observacoes: texto(dados, "observacoes"),
     })
@@ -74,6 +84,7 @@ export async function atualizarDiagnostico(id: string, dados: FormData) {
       data_inicio: texto(dados, "data_inicio") ?? hoje(),
       data_prevista: texto(dados, "data_prevista"),
       responsavel_id: texto(dados, "responsavel_id"),
+      responsaveis_area: areas(dados),
       pasta_url: texto(dados, "pasta_url"),
       observacoes: texto(dados, "observacoes"),
     })

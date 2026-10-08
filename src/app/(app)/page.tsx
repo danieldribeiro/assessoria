@@ -8,12 +8,13 @@ import {
   Lightbulb,
   ListChecks,
   TriangleAlert,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { EtiquetaPrioridade, EtiquetaStatus } from "@/components/etiquetas";
 import { CabecalhoCartao, CabecalhoPagina, Cartao, Etiqueta, Vazio, cx, iniciais } from "@/components/ui";
-import { porPrioridade, type Prioridade } from "@/lib/dominio";
+import { porPrioridade, responsavelDoItem, type Prioridade, type ResponsaveisArea } from "@/lib/dominio";
 import { atrasada, diasUteisAte, formatarData, formatarPeriodo } from "@/lib/datas";
 import { resumoColeta } from "@/lib/consultas";
 import { criarCliente } from "@/lib/supabase/server";
@@ -28,7 +29,10 @@ type DiagnosticoLinha = {
   data_prevista: string | null;
   empresa: { id: string; nome: string };
   responsavel: { nome: string } | null;
-  solicitacoes: { status: string }[];
+  responsaveis_area: ResponsaveisArea | null;
+  solicitacoes: { status: string; categoria: string; responsavel_id: string | null }[];
+  indicadores: { valor: number | null; categoria: string; responsavel_id: string | null }[];
+  achados: { status: string; categoria: string; responsavel_id: string | null }[];
 };
 
 type ItemLinha = {
@@ -70,12 +74,15 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
   const filtro: Filtro = (filtroParam as Filtro) in FILTROS ? (filtroParam as Filtro) : "todos";
 
   const supabase = await criarCliente();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const emAndamento = ["Coleta", "Em análise", "Revisão", "Apresentação"];
   const [diagnosticos, achados, oportunidades, acoes] = await Promise.all([
     supabase
       .from("diagnosticos")
       .select(
-        "id, status, periodo_inicio, periodo_fim, data_prevista, empresa:empresas(id, nome), responsavel:perfis!responsavel_id(nome), solicitacoes(status)",
+        "id, status, periodo_inicio, periodo_fim, data_prevista, empresa:empresas(id, nome), responsavel:perfis!responsavel_id(nome), responsaveis_area, solicitacoes(status, categoria, responsavel_id), indicadores(valor, categoria, responsavel_id), achados(status, categoria, responsavel_id)",
       )
       .in("status", emAndamento)
       .order("data_prevista", { ascending: true, nullsFirst: false }),
@@ -181,6 +188,18 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
 
   const filtrados = lista.filter(FILTROS[filtro].teste);
 
+  // O que está com quem entrou: itens da sua área ou atribuídos a você.
+  const meu = (d: DiagnosticoLinha) => (i: { categoria: string; responsavel_id: string | null }) =>
+    !!user && responsavelDoItem(i, d.responsaveis_area) === user.id;
+  const comigo = lista
+    .map((d) => ({
+      d,
+      coleta: d.solicitacoes.filter((s) => s.status !== "Recebido" && s.status !== "Não disponível").filter(meu(d)).length,
+      indicadores: d.indicadores.filter((i) => i.valor === null).filter(meu(d)).length,
+      achados: d.achados.filter((a) => a.status === "Aberto").filter(meu(d)).length,
+    }))
+    .filter((x) => x.coleta + x.indicadores + x.achados > 0);
+
   return (
     <>
       <CabecalhoPagina
@@ -235,6 +254,45 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
           );
         })}
       </div>
+
+      <Cartao className="mb-6 overflow-hidden">
+        <CabecalhoCartao titulo="Com você" contagem={comigo.length} icone={<UserRound />}>
+          <span className="hidden text-xs text-slate-500 sm:inline">Itens das suas áreas ou atribuídos a você</span>
+        </CabecalhoCartao>
+        {comigo.length === 0 ? (
+          <Vazio icone={<UserRound />}>Nada pendente com você nos diagnósticos em andamento.</Vazio>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {comigo.map(({ d, coleta, indicadores, achados }) => {
+              const base = `/diagnosticos/${d.id}`;
+              const de = user ? `&de=${user.id}` : "";
+              const chips = [
+                { n: coleta, rotulo: coleta === 1 ? "item de coleta" : "itens de coleta", aba: "coleta" },
+                { n: indicadores, rotulo: indicadores === 1 ? "indicador a preencher" : "indicadores a preencher", aba: "analise" },
+                { n: achados, rotulo: achados === 1 ? "achado aberto" : "achados abertos", aba: "achados" },
+              ].filter((c) => c.n > 0);
+              return (
+                <li key={d.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
+                  <Link href={base} className="min-w-40 flex-1 text-sm font-medium text-slate-900 hover:text-marca-700">
+                    {d.empresa.nome}
+                  </Link>
+                  <span className="flex flex-wrap gap-2">
+                    {chips.map((c) => (
+                      <Link
+                        key={c.aba}
+                        href={`${base}?aba=${c.aba}${de}`}
+                        className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600 transition-colors hover:bg-marca-50 hover:text-marca-700"
+                      >
+                        <span className="font-semibold tabular-nums text-slate-900">{c.n}</span> {c.rotulo}
+                      </Link>
+                    ))}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Cartao>
 
       <div className="grid gap-6 lg:grid-cols-5">
         <Cartao className="overflow-hidden lg:col-span-3">

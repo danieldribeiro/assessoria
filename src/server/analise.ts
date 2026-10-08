@@ -9,7 +9,7 @@ import {
   type Categoria,
   type Prioridade,
 } from "@/lib/dominio";
-import { atualizarTelas, exigir, falha, nota, numero, texto } from "@/server/util";
+import { atualizarTelas, exigir, falha, nota, numero, responsavel, texto } from "@/server/util";
 
 function categoria(dados: FormData): Categoria {
   const c = texto(dados, "categoria");
@@ -39,6 +39,7 @@ export async function salvarIndicador(diagnosticoId: string, id: string | null, 
     periodo: texto(dados, "periodo"),
     referencia: texto(dados, "referencia"),
     observacao: texto(dados, "observacao"),
+    ...responsavel(dados),
   };
 
   const supabase = await criarCliente();
@@ -69,6 +70,7 @@ export async function salvarAchado(diagnosticoId: string, id: string | null, dad
     causa_provavel: texto(dados, "causa_provavel"),
     impacto: texto(dados, "impacto"),
     ...priorizacao(dados),
+    ...responsavel(dados),
     ...(texto(dados, "status") ? { status: texto(dados, "status") } : {}),
   };
 
@@ -107,6 +109,7 @@ export async function salvarOportunidade(diagnosticoId: string, id: string | nul
     potencial_impacto: texto(dados, "potencial_impacto"),
     esforco_estimado: texto(dados, "esforco_estimado"),
     ...priorizacao(dados),
+    ...responsavel(dados),
     ...(texto(dados, "status") ? { status: texto(dados, "status") } : {}),
   };
 

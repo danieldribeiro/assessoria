@@ -5,7 +5,8 @@ import { CamposAcao, CamposAchado, CamposOportunidade } from "@/components/formu
 import { PainelLateral } from "@/components/painel-lateral";
 import { Cartao, Etiqueta, Vazio, classeBotao } from "@/components/ui";
 import { NOTAS, STATUS_ACHADO, STATUS_OPORTUNIDADE, type Achado, type Oportunidade } from "@/lib/dominio";
-import type { DiagnosticoCompleto } from "@/lib/consultas";
+import { filtrarPorResponsavel } from "@/lib/consultas";
+import { BarraFiltro, ResponsavelDoItem, type PropsAba } from "./responsaveis";
 import {
   excluirAchado,
   excluirOportunidade,
@@ -57,11 +58,13 @@ function ResumoPrioridades({ itens }: { itens: (Achado | Oportunidade)[] }) {
   );
 }
 
-export function AbaAchados({ d }: { d: DiagnosticoCompleto }) {
+export function AbaAchados({ d, de, usuarioId }: PropsAba) {
+  const lista = filtrarPorResponsavel(d.achados, d.responsaveis_area, de);
   return (
     <div className="space-y-4">
+      <BarraFiltro d={d} de={de} usuarioId={usuarioId} aba="achados" itens={d.achados} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ResumoPrioridades itens={d.achados} />
+        <ResumoPrioridades itens={lista} />
         <PainelLateral
           titulo="Novo achado"
           gatilho={
@@ -73,11 +76,11 @@ export function AbaAchados({ d }: { d: DiagnosticoCompleto }) {
           classeGatilho={classeBotao("primario")}
           acao={salvarAchado.bind(null, d.id, null)}
         >
-          <CamposAchado />
+          <CamposAchado equipe={d.equipe} areas={d.responsaveis_area} />
         </PainelLateral>
       </div>
 
-      {d.achados.length === 0 && (
+      {lista.length === 0 && (
         <Cartao>
           <Vazio>
             Nenhum achado ainda. Registre cada problema que a análise revelar, com a evidência, a causa provável
@@ -86,12 +89,13 @@ export function AbaAchados({ d }: { d: DiagnosticoCompleto }) {
         </Cartao>
       )}
 
-      {d.achados.map((a) => (
+      {lista.map((a) => (
         <Cartao key={a.id} className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <EtiquetaPrioridade prioridade={a.prioridade} manual={!!a.prioridade_manual} />
               <Etiqueta>{a.categoria}</Etiqueta>
+              <ResponsavelDoItem d={d} item={a} />
             </div>
             <div className="flex items-center gap-2">
               <SeletorImediato
@@ -130,7 +134,7 @@ export function AbaAchados({ d }: { d: DiagnosticoCompleto }) {
             acao={salvarAchado.bind(null, d.id, a.id)}
             rodape={<BotaoExcluir acao={excluirAchado.bind(null, a.id)} pergunta={`Excluir “${a.titulo}”?`} />}
           >
-            <CamposAchado achado={a} />
+            <CamposAchado achado={a} equipe={d.equipe} areas={d.responsaveis_area} />
           </PainelLateral>
           {a.descricao && <p className="mt-0.5 text-sm text-slate-600">{a.descricao}</p>}
           <dl className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -148,11 +152,13 @@ export function AbaAchados({ d }: { d: DiagnosticoCompleto }) {
   );
 }
 
-export function AbaOportunidades({ d }: { d: DiagnosticoCompleto }) {
+export function AbaOportunidades({ d, de, usuarioId }: PropsAba) {
+  const lista = filtrarPorResponsavel(d.oportunidades, d.responsaveis_area, de);
   return (
     <div className="space-y-4">
+      <BarraFiltro d={d} de={de} usuarioId={usuarioId} aba="oportunidades" itens={d.oportunidades} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ResumoPrioridades itens={d.oportunidades} />
+        <ResumoPrioridades itens={lista} />
         <PainelLateral
           titulo="Nova oportunidade"
           gatilho={
@@ -164,11 +170,11 @@ export function AbaOportunidades({ d }: { d: DiagnosticoCompleto }) {
           classeGatilho={classeBotao("primario")}
           acao={salvarOportunidade.bind(null, d.id, null)}
         >
-          <CamposOportunidade />
+          <CamposOportunidade equipe={d.equipe} areas={d.responsaveis_area} />
         </PainelLateral>
       </div>
 
-      {d.oportunidades.length === 0 && (
+      {lista.length === 0 && (
         <Cartao>
           <Vazio>
             Nenhuma oportunidade ainda. Registre o que pode gerar ganho para o cliente, mesmo sem um problema por
@@ -177,12 +183,13 @@ export function AbaOportunidades({ d }: { d: DiagnosticoCompleto }) {
         </Cartao>
       )}
 
-      {d.oportunidades.map((o) => (
+      {lista.map((o) => (
         <Cartao key={o.id} className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <EtiquetaPrioridade prioridade={o.prioridade} manual={!!o.prioridade_manual} />
               <Etiqueta>{o.categoria}</Etiqueta>
+              <ResponsavelDoItem d={d} item={o} />
             </div>
             <div className="flex items-center gap-2">
               <SeletorImediato
@@ -221,7 +228,7 @@ export function AbaOportunidades({ d }: { d: DiagnosticoCompleto }) {
             acao={salvarOportunidade.bind(null, d.id, o.id)}
             rodape={<BotaoExcluir acao={excluirOportunidade.bind(null, o.id)} pergunta={`Excluir “${o.titulo}”?`} />}
           >
-            <CamposOportunidade oportunidade={o} />
+            <CamposOportunidade oportunidade={o} equipe={d.equipe} areas={d.responsaveis_area} />
           </PainelLateral>
           {o.descricao && <p className="mt-0.5 text-sm text-slate-600">{o.descricao}</p>}
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
