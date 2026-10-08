@@ -19,7 +19,7 @@ export default function Login() {
         </div>
         <form action={acao} className="space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <Campo rotulo="E-mail">
-            <Entrada name="email" type="email" autoComplete="email" required autoFocus />
+            <Entrada name="email" type="email" autoComplete="email" defaultValue={estado?.email} required autoFocus />
           </Campo>
           <Campo rotulo="Senha">
             <Entrada name="senha" type="password" autoComplete="current-password" required />

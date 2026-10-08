@@ -4,14 +4,14 @@ import { redirect } from "next/navigation";
 import { criarCliente } from "@/lib/supabase/server";
 import { texto } from "@/server/util";
 
-export async function entrar(_estado: { erro?: string } | undefined, dados: FormData) {
+export async function entrar(_estado: { erro?: string; email?: string } | undefined, dados: FormData) {
   const email = texto(dados, "email");
   const senha = texto(dados, "senha");
-  if (!email || !senha) return { erro: "Informe e-mail e senha." };
+  if (!email || !senha) return { erro: "Informe e-mail e senha.", email: email ?? undefined };
 
   const supabase = await criarCliente();
   const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if (error) return { erro: "E-mail ou senha incorretos." };
+  if (error) return { erro: "E-mail ou senha incorretos.", email };
   redirect("/");
 }
 
