@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { BotaoExcluir } from "@/components/controles";
 import { CamposIndicador } from "@/components/formularios";
 import { PainelLateral } from "@/components/painel-lateral";
@@ -22,7 +23,12 @@ export function AbaIndicadores({ d }: { d: DiagnosticoCompleto }) {
         </p>
         <PainelLateral
           titulo="Novo indicador"
-          gatilho="+ Indicador"
+          gatilho={
+            <>
+              <Plus />
+              Novo indicador
+            </>
+          }
           classeGatilho={classeBotao("primario")}
           acao={salvarIndicador.bind(null, d.id, null)}
         >

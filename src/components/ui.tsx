@@ -7,16 +7,16 @@ function cx(...classes: (string | false | null | undefined)[]) {
 export { cx };
 
 const variantes = {
-  primario: "bg-marca-600 text-white hover:bg-marca-700 shadow-sm",
-  secundario: "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm",
+  primario: "bg-marca-600 text-white hover:bg-marca-700 shadow-sm shadow-marca-600/20",
+  secundario: "bg-superficie text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-xs",
   fantasma: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
   perigo: "text-red-600 hover:bg-red-50",
 };
 
 export function classeBotao(variante: keyof typeof variantes = "primario", pequeno = false) {
   return cx(
-    "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none cursor-pointer",
-    pequeno ? "h-7 px-2.5 text-xs" : "h-9 px-3.5 text-sm",
+    "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none cursor-pointer",
+    pequeno ? "h-7 px-2.5 text-xs [&_svg]:size-3.5" : "h-9 px-3.5 text-sm [&_svg]:size-4",
     variantes[variante],
   );
 }
@@ -40,7 +40,7 @@ export function LinkBotao({
 }
 
 export const classeInput =
-  "block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-marca-600 focus:outline-none focus:ring-2 focus:ring-marca-100";
+  "block w-full rounded-lg border border-slate-200 bg-superficie px-3 py-2 text-sm text-slate-900 shadow-xs placeholder:text-slate-400 focus:border-marca-500 focus:outline-none focus:ring-3 focus:ring-marca-100";
 
 export function Campo({
   rotulo,
@@ -99,7 +99,7 @@ export function Selecao({
 export function Cartao({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
-      className={cx("rounded-lg border border-slate-200 bg-white shadow-sm", className)}
+      className={cx("rounded-xl border border-slate-200/80 bg-superficie shadow-xs", className)}
       {...props}
     />
   );
@@ -109,14 +109,17 @@ export function CabecalhoCartao({
   titulo,
   children,
   contagem,
+  icone,
 }: {
   titulo: string;
   children?: ReactNode;
   contagem?: number;
+  icone?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-      <h2 className="text-sm font-semibold text-slate-900">
+    <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
+      <h2 className="flex items-center text-sm font-semibold text-slate-900">
+        {icone && <span className="mr-2 text-slate-400 [&_svg]:size-4">{icone}</span>}
         {titulo}
         {contagem !== undefined && (
           <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
@@ -132,25 +135,39 @@ export function CabecalhoCartao({
 export function CabecalhoPagina({
   titulo,
   subtitulo,
+  icone,
   children,
 }: {
   titulo: ReactNode;
   subtitulo?: ReactNode;
+  icone?: ReactNode;
   children?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">{titulo}</h1>
-        {subtitulo && <div className="mt-1 text-sm text-slate-500">{subtitulo}</div>}
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
+      <div className="min-w-0">
+        <h1 className="flex items-center gap-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          {icone && <span className="text-marca-600 [&_svg]:size-7">{icone}</span>}
+          {titulo}
+        </h1>
+        {subtitulo && <div className="mt-1.5 text-sm text-slate-500 sm:text-base">{subtitulo}</div>}
       </div>
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </div>
   );
 }
 
-export function Vazio({ children }: { children: ReactNode }) {
-  return <div className="px-4 py-8 text-center text-sm text-slate-500">{children}</div>;
+export function Vazio({ children, icone }: { children: ReactNode; icone?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center px-6 py-10 text-center text-sm text-slate-500">
+      {icone && (
+        <span className="mb-3 flex size-10 items-center justify-center rounded-full bg-slate-100 text-slate-400 [&_svg]:size-5">
+          {icone}
+        </span>
+      )}
+      <div className="max-w-sm">{children}</div>
+    </div>
+  );
 }
 
 export const tons = {
@@ -190,9 +207,20 @@ export function Etiqueta({
 
 export const classeTabela = {
   tabela: "w-full text-left text-sm",
-  cabeca:
-    "border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500",
-  th: "px-4 py-2.5 font-medium",
-  linha: "border-b border-slate-100 last:border-0 hover:bg-slate-50/60",
-  td: "px-4 py-2.5 align-top",
+  cabeca: "border-b border-slate-100 bg-slate-50/70 text-xs font-medium text-slate-500",
+  th: "px-5 py-2.5 font-medium first:pl-5",
+  linha: "border-b border-slate-100 last:border-0 transition-colors hover:bg-slate-50/70",
+  td: "px-5 py-3 align-top",
 };
+
+// Iniciais para o avatar da empresa, ignorando palavras genéricas ("Clínica Odonto Vida" → "V").
+const GENERICAS = new Set(["clínica", "clinica", "odonto", "odontologia", "consultório", "consultorio", "centro", "de", "da", "do", "das", "dos", "e"]);
+export function iniciais(nome: string) {
+  const palavras = nome.replace(/\(.*?\)/g, "").split(/\s+/).filter(Boolean);
+  const uteis = palavras.filter((p) => !GENERICAS.has(p.toLowerCase()));
+  return (uteis.length ? uteis : palavras)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
+}

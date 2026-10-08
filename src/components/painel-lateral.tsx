@@ -60,7 +60,7 @@ export function PainelLateral({
       </button>
       <dialog
         ref={dialogo}
-        className="m-0 ml-auto h-dvh max-h-dvh w-full max-w-lg bg-white p-0 shadow-xl"
+        className="m-0 ml-auto h-dvh max-h-dvh w-full max-w-lg bg-superficie p-0 shadow-xl"
         onClick={(e) => e.target === dialogo.current && dialogo.current?.close()}
       >
         <form key={chave} onSubmit={enviar} className="flex h-full flex-col">

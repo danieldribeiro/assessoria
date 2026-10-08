@@ -67,7 +67,7 @@ function Matriz({ itens }: { itens: { codigo: string; item: Achado | Oportunidad
                       <span
                         key={codigo}
                         title={item.titulo}
-                        className="rounded bg-white px-1.5 py-0.5 text-xs font-semibold text-slate-800 ring-1 ring-slate-300"
+                        className="rounded bg-superficie px-1.5 py-0.5 text-xs font-semibold text-slate-800 ring-1 ring-slate-300"
                       >
                         {codigo}
                       </span>
@@ -105,8 +105,8 @@ export default async function Relatorio({ params }: PageProps<"/diagnosticos/[id
 
   let n = 0;
   return (
-    <div className="min-h-dvh bg-slate-100 print:bg-white">
-      <div className="nao-imprimir sticky top-0 z-10 border-b border-slate-200 bg-white">
+    <div className="sempre-claro min-h-dvh bg-slate-100 text-slate-900 print:bg-superficie">
+      <div className="nao-imprimir sticky top-0 z-10 border-b border-slate-200 bg-superficie">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
           <Link href={`/diagnosticos/${d.id}`} className="text-sm text-slate-500 hover:text-slate-900">
             ← Voltar ao diagnóstico
@@ -115,7 +115,7 @@ export default async function Relatorio({ params }: PageProps<"/diagnosticos/[id
         </div>
       </div>
 
-      <article className="mx-auto my-8 max-w-4xl bg-white px-12 py-14 shadow-sm print:my-0 print:max-w-none print:px-0 print:py-0 print:shadow-none">
+      <article className="mx-auto my-8 max-w-4xl bg-superficie px-12 py-14 shadow-sm print:my-0 print:max-w-none print:px-0 print:py-0 print:shadow-none">
         <header className="border-b border-slate-200 pb-10">
           <div className="text-sm font-semibold uppercase tracking-widest text-marca-600">Diagnóstico empresarial</div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">{d.empresa.nome}</h1>

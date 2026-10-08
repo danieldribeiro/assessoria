@@ -1,16 +1,24 @@
 @import "tailwindcss";
+@import "./tema-escuro.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --color-marca-50: #eef4ff;
-  --color-marca-100: #dbe7fe;
-  --color-marca-600: #2453c7;
-  --color-marca-700: #1c43a6;
-  --color-marca-800: #1a3780;
+  --color-marca-50: #eff6ff;
+  --color-marca-100: #dbeafe;
+  --color-marca-200: #bfdbfe;
+  --color-marca-500: #3b82f6;
+  --color-marca-600: #2563eb;
+  --color-marca-700: #1d4ed8;
+  --color-marca-800: #1e40af;
+  --color-marca-900: #1e3a8a;
+  --color-fundo: #f6f7f9;
+  --color-superficie: #ffffff;
 }
 
 body {
-  background: var(--color-slate-50);
+  background: var(--color-fundo);
   color: var(--color-slate-900);
 }
 

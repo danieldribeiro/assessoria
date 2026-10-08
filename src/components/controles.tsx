@@ -56,7 +56,7 @@ export function SeletorImediato({
                 "rounded-full py-0.5 pl-2.5 pr-6 text-xs font-medium ring-1 ring-inset hover:brightness-95",
                 tons[tomDoStatus(atual)],
               )
-            : "rounded-md border border-slate-200 bg-white py-1 pl-2.5 pr-7 text-sm hover:border-slate-300 focus:border-marca-600",
+            : "rounded-md border border-slate-200 bg-superficie py-1 pl-2.5 pr-7 text-sm hover:border-slate-300 focus:border-marca-600",
           className,
         )}
       >
@@ -162,7 +162,7 @@ export function NotaUmATres({
               onChange={() => aoMudar?.(n)}
               className="peer sr-only"
             />
-            <span className="block rounded px-2 py-1.5 text-center text-xs text-slate-600 peer-checked:bg-white peer-checked:font-medium peer-checked:text-slate-900 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-marca-100">
+            <span className="block rounded px-2 py-1.5 text-center text-xs text-slate-600 peer-checked:bg-superficie peer-checked:font-medium peer-checked:text-slate-900 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-marca-100">
               {n} · {legendas[n - 1]}
             </span>
           </label>

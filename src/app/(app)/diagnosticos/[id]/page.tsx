@@ -1,8 +1,25 @@
+import {
+  CalendarClock,
+  CalendarDays,
+  ChartColumn,
+  Check,
+  ChevronRight,
+  ClipboardList,
+  FileText,
+  FolderOpen,
+  LayoutGrid,
+  Lightbulb,
+  ListChecks,
+  Pencil,
+  TriangleAlert,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { BotaoExcluir, SeletorImediato } from "@/components/controles";
 import { CamposDiagnostico } from "@/components/formularios";
 import { PainelLateral } from "@/components/painel-lateral";
-import { Etiqueta, LinkBotao, classeBotao, cx } from "@/components/ui";
+import { Cartao, Etiqueta, LinkBotao, classeBotao, cx, iniciais } from "@/components/ui";
 import { STATUS_DIAGNOSTICO } from "@/lib/dominio";
 import { atrasada, diasUteisAte, formatarData, formatarPeriodo } from "@/lib/datas";
 import { carregarDiagnostico, listarEquipe, resumoColeta } from "@/lib/consultas";
@@ -35,21 +52,27 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
   const acoesAtrasadas = d.acoes.filter((a) => atrasada(a.prazo, a.status)).length;
   const acoesAbertas = d.acoes.filter((a) => a.status === "A fazer" || a.status === "Em andamento").length;
 
-  const etapas: { aba: Aba; nome: string; valor: string; detalhe: string; alerta?: boolean }[] = [
+  const etapas: Etapa[] = [
     {
       aba: "coleta",
+      icone: ClipboardList,
+      feita: coleta.total > 0 && coleta.faltam === 0,
       nome: "Coleta",
       valor: `${coleta.recebidos}/${coleta.total}`,
       detalhe: coleta.faltam === 0 ? "completa" : `${coleta.faltam} faltando`,
     },
     {
       aba: "analise",
+      icone: ChartColumn,
+      feita: d.indicadores.length > 0 && preenchidos === d.indicadores.length,
       nome: "Análise",
       valor: `${preenchidos}/${d.indicadores.length}`,
       detalhe: "indicadores",
     },
     {
       aba: "achados",
+      icone: TriangleAlert,
+      feita: d.achados.length > 0,
       nome: "Achados",
       valor: String(d.achados.length),
       detalhe: achadosAltos ? `${achadosAltos} de prioridade alta` : "registrados",
@@ -57,12 +80,16 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
     },
     {
       aba: "oportunidades",
+      icone: Lightbulb,
+      feita: d.oportunidades.length > 0,
       nome: "Oportunidades",
       valor: String(d.oportunidades.length),
       detalhe: oportunidadesAltas ? `${oportunidadesAltas} de prioridade alta` : "registradas",
     },
     {
       aba: "plano",
+      icone: ListChecks,
+      feita: d.acoes.length > 0,
       nome: "Plano de ação",
       valor: String(d.acoes.length),
       detalhe: acoesAtrasadas ? `${acoesAtrasadas} atrasada${acoesAtrasadas > 1 ? "s" : ""}` : `${acoesAbertas} em aberto`,
@@ -72,59 +99,81 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
 
   const prazo = d.data_prevista && d.status !== "Concluído" ? diasUteisAte(d.data_prevista) : null;
 
+  const meta = [
+    { icone: UserRound, texto: d.responsavel?.nome ?? "Sem responsável" },
+    { icone: CalendarDays, texto: `Início ${formatarData(d.data_inicio)}` },
+  ];
+
   return (
     <>
-      <nav aria-label="Caminho" className="mb-2 flex items-center gap-1.5 text-sm text-slate-500">
-        <Link href="/empresas" className="hover:text-slate-900">
-          Empresas
-        </Link>
-        <span aria-hidden>/</span>
-        <Link href={`/empresas/${d.empresa.id}`} className="truncate hover:text-slate-900">
-          {d.empresa.nome}
-        </Link>
-      </nav>
-
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-              Diagnóstico {formatarPeriodo(d.periodo_inicio, d.periodo_fim)}
-            </h1>
-            <SeletorImediato
-              key={d.status}
-              etiqueta
-              rotulo="Etapa do diagnóstico"
-              valor={d.status}
-              opcoes={STATUS_DIAGNOSTICO}
-              acao={mudarStatusDiagnostico.bind(null, d.id)}
-            />
-          </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-            <span>
-              Responsável <span className="text-slate-700">{d.responsavel?.nome ?? "—"}</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              Entrega <span className="text-slate-700">{formatarData(d.data_prevista)}</span>
-              {prazo !== null &&
-                (prazo < 0 ? (
-                  <Etiqueta tom="vermelho">atrasado</Etiqueta>
-                ) : prazo <= 2 ? (
-                  <Etiqueta tom="ambar">{prazo === 0 ? "hoje" : `${prazo} dia${prazo > 1 ? "s" : ""} úte${prazo > 1 ? "is" : "il"}`}</Etiqueta>
-                ) : (
-                  <span className="text-slate-400">({prazo} dias úteis)</span>
-                ))}
-            </span>
-            {d.pasta_url && (
-              <a href={d.pasta_url} target="_blank" rel="noreferrer" className="text-marca-700 hover:underline">
-                Pasta de documentos ↗
-              </a>
-            )}
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-4">
+          <span className="hidden size-12 shrink-0 items-center justify-center rounded-xl bg-marca-50 text-lg font-semibold text-marca-700 sm:flex">
+            {iniciais(d.empresa.nome)}
+          </span>
+          <div className="min-w-0">
+            <Link
+              href={`/empresas/${d.empresa.id}`}
+              className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
+            >
+              {d.empresa.nome}
+              <ChevronRight className="size-3.5" />
+            </Link>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                Diagnóstico {formatarPeriodo(d.periodo_inicio, d.periodo_fim)}
+              </h1>
+              <SeletorImediato
+                key={d.status}
+                etiqueta
+                rotulo="Etapa do diagnóstico"
+                valor={d.status}
+                opcoes={STATUS_DIAGNOSTICO}
+                acao={mudarStatusDiagnostico.bind(null, d.id)}
+              />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-slate-500">
+              {meta.map((m) => (
+                <span key={m.texto} className="inline-flex items-center gap-1.5">
+                  <m.icone className="size-4 text-slate-400" />
+                  {m.texto}
+                </span>
+              ))}
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarClock className="size-4 text-slate-400" />
+                Entrega {formatarData(d.data_prevista)}
+                {prazo !== null &&
+                  (prazo < 0 ? (
+                    <Etiqueta tom="vermelho">atrasado</Etiqueta>
+                  ) : prazo <= 2 ? (
+                    <Etiqueta tom="ambar">{prazo === 0 ? "hoje" : `${prazo} dia${prazo > 1 ? "s" : ""} úte${prazo > 1 ? "is" : "il"}`}</Etiqueta>
+                  ) : (
+                    <span className="text-slate-400">({prazo} dias úteis)</span>
+                  ))}
+              </span>
+              {d.pasta_url && (
+                <a
+                  href={d.pasta_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 font-medium text-marca-700 hover:underline"
+                >
+                  <FolderOpen className="size-4" />
+                  Pasta de documentos
+                </a>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PainelLateral
             titulo="Editar diagnóstico"
-            gatilho="Editar"
+            gatilho={
+              <>
+                <Pencil />
+                Editar
+              </>
+            }
             classeGatilho={classeBotao("secundario")}
             acao={atualizarDiagnostico.bind(null, d.id)}
             rodape={
@@ -137,66 +186,122 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
             <CamposDiagnostico diagnostico={d} equipe={equipe} />
           </PainelLateral>
           <LinkBotao href={`/diagnosticos/${d.id}/relatorio`} variante="primario">
+            <FileText />
             Relatório final
           </LinkBotao>
         </div>
       </div>
 
-      <nav aria-label="Etapas do diagnóstico" className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-        <ol className="flex min-w-max items-stretch gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-          <li>
-            <Link
-              href={`/diagnosticos/${d.id}`}
-              aria-current={aba === "visao" ? "page" : undefined}
-              className={cx(
-                "flex h-full flex-col justify-center rounded-md px-4 py-2 text-sm font-medium",
-                aba === "visao" ? "bg-marca-600 text-white" : "text-slate-600 hover:bg-slate-50",
-              )}
-            >
-              Visão geral
-            </Link>
-          </li>
-          {etapas.map((e, i) => (
-            <li key={e.aba} className="flex items-center gap-1">
-              {i === 0 ? (
-                <span className="mx-1 h-8 w-px bg-slate-200" aria-hidden />
-              ) : (
-                <span className="px-1 text-slate-300" aria-hidden>
-                  →
-                </span>
-              )}
-              <Link
-                href={`/diagnosticos/${d.id}?aba=${e.aba}`}
-                aria-current={aba === e.aba ? "page" : undefined}
-                className={cx(
-                  "flex min-w-28 flex-col rounded-md px-3 py-2 sm:min-w-32 sm:px-4",
-                  aba === e.aba ? "bg-marca-600 text-white" : "hover:bg-slate-50",
-                )}
-              >
-                <span className={cx("text-xs font-medium", aba === e.aba ? "text-marca-100" : "text-slate-500")}>
-                  {e.nome}
-                </span>
-                <span className="text-lg font-semibold leading-tight">{e.valor}</span>
-                <span
-                  className={cx(
-                    "text-xs",
-                    aba === e.aba ? "text-marca-100" : e.alerta ? "text-red-600" : "text-slate-500",
-                  )}
-                >
-                  {e.detalhe}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ol>
+      <nav
+        aria-label="Etapas do diagnóstico"
+        className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+      >
+        <ul className="inline-flex min-w-max gap-1 rounded-xl bg-slate-100 p-1">
+          {[{ aba: "visao" as Aba, nome: "Visão geral", icone: LayoutGrid, valor: "", detalhe: "", alerta: false }, ...etapas].map(
+            (e) => {
+              const ativa = aba === e.aba;
+              return (
+                <li key={e.aba}>
+                  <Link
+                    href={e.aba === "visao" ? `/diagnosticos/${d.id}` : `/diagnosticos/${d.id}?aba=${e.aba}`}
+                    aria-current={ativa ? "page" : undefined}
+                    title={e.detalhe || undefined}
+                    className={cx(
+                      "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+                      ativa
+                        ? "bg-superficie text-slate-900 shadow-xs"
+                        : "text-slate-500 hover:text-slate-800",
+                    )}
+                  >
+                    <e.icone className={cx("size-4", ativa ? "text-marca-600" : "text-slate-400")} />
+                    {e.nome}
+                    {e.valor && (
+                      <span
+                        className={cx(
+                          "rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+                          e.alerta
+                            ? "bg-red-50 text-red-700"
+                            : ativa
+                              ? "bg-marca-50 text-marca-700"
+                              : "bg-slate-200/70 text-slate-600",
+                        )}
+                      >
+                        {e.valor}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            },
+          )}
+        </ul>
       </nav>
 
-      {aba === "visao" && <AbaVisaoGeral d={d} />}
+      {aba === "visao" && (
+        <>
+          <Jornada etapas={etapas} id={d.id} />
+          <AbaVisaoGeral d={d} />
+        </>
+      )}
       {aba === "coleta" && <AbaColeta d={d} />}
       {aba === "analise" && <AbaIndicadores d={d} />}
       {aba === "achados" && <AbaAchados d={d} />}
       {aba === "oportunidades" && <AbaOportunidades d={d} />}
       {aba === "plano" && <AbaPlano d={d} />}
     </>
+  );
+}
+
+type Etapa = {
+  aba: Aba;
+  nome: string;
+  icone: LucideIcon;
+  valor: string;
+  detalhe: string;
+  feita: boolean;
+  alerta?: boolean;
+};
+
+// Coleta → Análise → Achados → Oportunidades → Plano de ação, com o andamento de cada passo.
+function Jornada({ etapas, id }: { etapas: Etapa[]; id: string }) {
+  const atual = etapas.findIndex((e) => !e.feita);
+  return (
+    <Cartao className="mb-6 hidden p-2 sm:block">
+      <ol className="grid gap-1 sm:grid-cols-5">
+        {etapas.map((e, i) => {
+          const estado = e.feita ? "feita" : i === atual ? "atual" : "pendente";
+          return (
+            <li key={e.aba}>
+              <Link
+                href={`/diagnosticos/${id}?aba=${e.aba}`}
+                className="flex h-full items-center gap-3 rounded-lg p-3 transition-colors hover:bg-slate-50"
+              >
+                <span
+                  className={cx(
+                    "flex size-9 shrink-0 items-center justify-center rounded-full",
+                    estado === "feita" && "bg-emerald-50 text-emerald-600",
+                    estado === "atual" && "bg-marca-600 text-white shadow-sm shadow-marca-600/30",
+                    estado === "pendente" && "bg-slate-100 text-slate-400",
+                  )}
+                >
+                  {estado === "feita" ? <Check className="size-4" /> : <e.icone className="size-4" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-medium text-slate-500">
+                    {i + 1}. {e.nome}
+                  </span>
+                  <span className="block text-base font-semibold leading-tight text-slate-900 tabular-nums">
+                    {e.valor}
+                  </span>
+                  <span className={cx("block truncate text-xs", e.alerta ? "text-red-600" : "text-slate-500")}>
+                    {e.detalhe}
+                  </span>
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ol>
+    </Cartao>
   );
 }
