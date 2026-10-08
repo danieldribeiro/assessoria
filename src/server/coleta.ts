@@ -3,7 +3,7 @@
 import { criarCliente } from "@/lib/supabase/server";
 import { CATEGORIAS, STATUS_SOLICITACAO, type Categoria, type StatusSolicitacao } from "@/lib/dominio";
 import { hoje } from "@/lib/datas";
-import { atualizarTelas, exigir, falha, texto } from "@/server/util";
+import { atualizarTelas, exigir, falha, responsavel, texto } from "@/server/util";
 
 function categoria(dados: FormData): Categoria {
   const c = texto(dados, "categoria");
@@ -24,6 +24,7 @@ export async function salvarSolicitacao(diagnosticoId: string, id: string | null
     data_recebimento: texto(dados, "data_recebimento"),
     link: texto(dados, "link"),
     observacao: texto(dados, "observacao"),
+    ...responsavel(dados),
   };
 
   const supabase = await criarCliente();

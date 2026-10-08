@@ -51,6 +51,17 @@ export function porPrioridade<T extends { prioridade: string }>(a: T, b: T) {
 
 export type Perfil = { id: string; nome: string; email: string };
 
+// Quem cuida de cada área no diagnóstico: { Financeiro: perfilId, ... }.
+export type ResponsaveisArea = Partial<Record<Categoria, string>>;
+
+// O item segue o responsável da sua área, a menos que tenha um próprio.
+export function responsavelDoItem(
+  item: { responsavel_id: string | null; categoria: string },
+  areas: ResponsaveisArea | null | undefined,
+) {
+  return item.responsavel_id ?? areas?.[item.categoria as Categoria] ?? null;
+}
+
 export type Empresa = {
   id: string;
   nome: string;
@@ -71,6 +82,7 @@ export type Contato = {
 
 export type Diagnostico = {
   id: string;
+  responsaveis_area: ResponsaveisArea;
   empresa_id: string;
   periodo_inicio: string;
   periodo_fim: string;
@@ -88,6 +100,7 @@ export type Solicitacao = {
   id: string;
   diagnostico_id: string;
   categoria: Categoria;
+  responsavel_id: string | null;
   item: string;
   status: StatusSolicitacao;
   data_solicitacao: string | null;
@@ -101,6 +114,7 @@ export type Indicador = {
   id: string;
   diagnostico_id: string;
   categoria: Categoria;
+  responsavel_id: string | null;
   nome: string;
   valor: number | null;
   unidade: string | null;
@@ -122,6 +136,7 @@ export type Achado = Priorizavel & {
   id: string;
   diagnostico_id: string;
   categoria: Categoria;
+  responsavel_id: string | null;
   titulo: string;
   descricao: string | null;
   evidencia: string | null;
@@ -134,6 +149,7 @@ export type Oportunidade = Priorizavel & {
   id: string;
   diagnostico_id: string;
   categoria: Categoria;
+  responsavel_id: string | null;
   titulo: string;
   descricao: string | null;
   potencial_impacto: string | null;

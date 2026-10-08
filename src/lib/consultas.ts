@@ -11,6 +11,8 @@ import {
   type Indicador,
   type Oportunidade,
   type Perfil,
+  type ResponsaveisArea,
+  responsavelDoItem,
   type Solicitacao,
 } from "@/lib/dominio";
 
@@ -38,22 +40,27 @@ export type DiagnosticoCompleto = Diagnostico & {
   achados: Achado[];
   oportunidades: Oportunidade[];
   acoes: Acao[];
+  equipe: Perfil[];
 };
 
 export async function carregarDiagnostico(id: string): Promise<DiagnosticoCompleto> {
   const supabase = await criarCliente();
-  const { data, error } = await supabase
+  const [{ data, error }, equipe] = await Promise.all([
+    supabase
     .from("diagnosticos")
     .select(
       `*, empresa:empresas(id, nome, segmento, cnpj), responsavel:perfis!responsavel_id(nome),
        solicitacoes(*), indicadores(*), achados(*), oportunidades(*), acoes(*)`,
     )
     .eq("id", id)
-    .maybeSingle();
+    .maybeSingle(),
+    listarEquipe(),
+  ]);
   if (error) throw new Error(error.message);
   if (!data) notFound();
 
-  const d = data as DiagnosticoCompleto;
+  const d = { ...data, equipe } as DiagnosticoCompleto;
+  d.responsaveis_area ??= {};
   const porCategoriaEOrdem = (a: { categoria: string; ordem: number }, b: { categoria: string; ordem: number }) =>
     ordemCategoria(a.categoria) - ordemCategoria(b.categoria) || a.ordem - b.ordem;
 
@@ -81,4 +88,30 @@ export function resumoColeta(solicitacoes: { status: string }[]) {
   const total = solicitacoes.filter((s) => s.status !== "Não disponível").length;
   const recebidos = solicitacoes.filter((s) => s.status === "Recebido").length;
   return { total, recebidos, faltam: total - recebidos };
+}
+
+// Filtro por responsável usado nas abas: undefined = todos, "sem" = ninguém, senão o id da pessoa.
+export function filtrarPorResponsavel<T extends { responsavel_id: string | null; categoria: string }>(
+  itens: T[],
+  areas: ResponsaveisArea,
+  de: string | undefined,
+) {
+  if (!de) return itens;
+  return itens.filter((i) => {
+    const r = responsavelDoItem(i, areas);
+    return de === "sem" ? r === null : r === de;
+  });
+}
+
+// Divisão de áreas do diagnóstico mais recente, para já vir preenchida no próximo.
+export async function ultimasAreas(): Promise<ResponsaveisArea> {
+  const supabase = await criarCliente();
+  const { data } = await supabase
+    .from("diagnosticos")
+    .select("responsaveis_area")
+    .neq("responsaveis_area", "{}")
+    .order("criado_em", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.responsaveis_area as ResponsaveisArea | undefined) ?? {};
 }

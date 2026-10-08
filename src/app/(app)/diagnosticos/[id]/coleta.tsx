@@ -5,18 +5,21 @@ import { PainelLateral } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Vazio, classeBotao, classeTabela as t } from "@/components/ui";
 import { STATUS_SOLICITACAO } from "@/lib/dominio";
 import { formatarData, hoje, somarDiasUteis } from "@/lib/datas";
-import { agruparPorCategoria, resumoColeta, type DiagnosticoCompleto } from "@/lib/consultas";
+import { agruparPorCategoria, filtrarPorResponsavel, resumoColeta } from "@/lib/consultas";
 import { excluirSolicitacao, mudarStatusSolicitacao, salvarSolicitacao, solicitarPendentes } from "@/server/coleta";
 import { definirEntregaAPartirDeHoje } from "@/server/diagnosticos";
+import { BarraFiltro, DonoDaArea, ResponsavelDoItem, type PropsAba } from "./responsaveis";
 
-export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
-  const { total, recebidos, faltam } = resumoColeta(d.solicitacoes);
+export function AbaColeta({ d, de, usuarioId }: PropsAba) {
+  const lista = filtrarPorResponsavel(d.solicitacoes, d.responsaveis_area, de);
+  const { total, recebidos, faltam } = resumoColeta(lista);
   const pendentes = d.solicitacoes.filter((s) => s.status === "Pendente").length;
   const percentual = total ? Math.round((recebidos / total) * 100) : 0;
   const novaEntrega = somarDiasUteis(hoje(), 5);
 
   return (
     <div className="space-y-4">
+      <BarraFiltro d={d} de={de} usuarioId={usuarioId} aba="coleta" itens={d.solicitacoes} />
       <Cartao className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0 basis-64 flex-1">
@@ -47,7 +50,7 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
               classeGatilho={classeBotao("primario")}
               acao={salvarSolicitacao.bind(null, d.id, null)}
             >
-              <CamposSolicitacao />
+              <CamposSolicitacao equipe={d.equipe} areas={d.responsaveis_area} />
             </PainelLateral>
           </div>
         </div>
@@ -67,17 +70,22 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
         )}
       </Cartao>
 
-      {d.solicitacoes.length === 0 && (
+      {lista.length === 0 && (
         <Cartao>
-          <Vazio>Nenhum item na lista de coleta. Use “+ Item” para pedir um documento ao cliente.</Vazio>
+          <Vazio>
+            {de
+              ? "Nenhum item de coleta com este responsável."
+              : "Nenhum item na lista de coleta. Use “Novo item” para pedir um documento ao cliente."}
+          </Vazio>
         </Cartao>
       )}
 
-      {agruparPorCategoria(d.solicitacoes).map(({ categoria, itens }) => {
+      {agruparPorCategoria(lista).map(({ categoria, itens }) => {
         const r = resumoColeta(itens);
         return (
           <Cartao key={categoria} className="overflow-hidden">
             <CabecalhoCartao titulo={categoria}>
+              <DonoDaArea d={d} categoria={categoria} />
               <span className="text-xs text-slate-500">
                 {r.recebidos}/{r.total} recebidos
               </span>
@@ -86,6 +94,9 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
               <thead className={t.cabeca}>
                 <tr>
                   <th className={t.th}>Item</th>
+                  <th className={`${t.th} w-12`}>
+                    <span className="sr-only">Responsável</span>
+                  </th>
                   <th className={`${t.th} w-40`}>Status</th>
                   <th className={`${t.th} hidden w-28 md:table-cell`}>Solicitado</th>
                   <th className={`${t.th} hidden w-28 md:table-cell`}>Recebido</th>
@@ -105,7 +116,7 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
                           <BotaoExcluir acao={excluirSolicitacao.bind(null, s.id)} pergunta={`Excluir “${s.item}”?`} />
                         }
                       >
-                        <CamposSolicitacao solicitacao={s} />
+                        <CamposSolicitacao solicitacao={s} equipe={d.equipe} areas={d.responsaveis_area} />
                       </PainelLateral>
                       {s.observacao && <div className="mt-0.5 text-xs text-slate-500">{s.observacao}</div>}
                       {(s.data_recebimento || s.data_solicitacao || s.link) && (
@@ -120,6 +131,9 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
                           )}
                         </div>
                       )}
+                    </td>
+                    <td className={`${t.td} pr-0`}>
+                      <ResponsavelDoItem d={d} item={s} />
                     </td>
                     <td className={t.td}>
                       <SeletorImediato

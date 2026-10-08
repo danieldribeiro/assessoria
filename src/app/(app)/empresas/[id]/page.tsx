@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import type { Contato, Diagnostico, Empresa } from "@/lib/dominio";
 import { formatarData, formatarPeriodo } from "@/lib/datas";
-import { listarEquipe, usuarioAtual } from "@/lib/consultas";
+import { listarEquipe, ultimasAreas, usuarioAtual } from "@/lib/consultas";
 import { criarCliente } from "@/lib/supabase/server";
 import { criarDiagnostico } from "@/server/diagnosticos";
 import { excluirContato, excluirEmpresa, salvarContato, salvarEmpresa } from "@/server/empresas";
@@ -29,7 +29,7 @@ type EmpresaDetalhe = Empresa & {
 export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id]">) {
   const { id } = await params;
   const supabase = await criarCliente();
-  const [{ data }, equipe, usuario] = await Promise.all([
+  const [{ data }, equipe, usuario, areasPadrao] = await Promise.all([
     supabase
       .from("empresas")
       .select("*, contatos(*), diagnosticos(*, responsavel:perfis!responsavel_id(nome))")
@@ -37,6 +37,7 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
       .maybeSingle(),
     listarEquipe(),
     usuarioAtual(),
+    ultimasAreas(),
   ]);
   if (!data) notFound();
   const empresa = data as EmpresaDetalhe;
@@ -89,7 +90,7 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
             O diagnóstico já é criado com a lista padrão de solicitações e de indicadores do segmento{" "}
             {empresa.segmento}.
           </p>
-          <CamposDiagnostico equipe={equipe} usuarioId={usuario?.id} />
+          <CamposDiagnostico equipe={equipe} usuarioId={usuario?.id} areasPadrao={areasPadrao} />
         </PainelLateral>
       </CabecalhoPagina>
 

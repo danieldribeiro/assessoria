@@ -4,18 +4,21 @@ import { CamposIndicador } from "@/components/formularios";
 import { PainelLateral } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Vazio, classeBotao, classeTabela as t } from "@/components/ui";
 import { formatarValor } from "@/lib/datas";
-import { agruparPorCategoria, type DiagnosticoCompleto } from "@/lib/consultas";
+import { agruparPorCategoria, filtrarPorResponsavel } from "@/lib/consultas";
 import { excluirIndicador, salvarIndicador } from "@/server/analise";
+import { BarraFiltro, DonoDaArea, ResponsavelDoItem, type PropsAba } from "./responsaveis";
 
-export function AbaIndicadores({ d }: { d: DiagnosticoCompleto }) {
-  const faltam = d.indicadores.filter((i) => i.valor === null).length;
+export function AbaIndicadores({ d, de, usuarioId }: PropsAba) {
+  const lista = filtrarPorResponsavel(d.indicadores, d.responsaveis_area, de);
+  const faltam = lista.filter((i) => i.valor === null).length;
   return (
     <div className="space-y-4">
+      <BarraFiltro d={d} de={de} usuarioId={usuarioId} aba="analise" itens={d.indicadores} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-500">
           {faltam > 0 ? (
             <>
-              <span className="font-medium text-slate-900">{faltam}</span> de {d.indicadores.length} indicadores a
+              <span className="font-medium text-slate-900">{faltam}</span> de {lista.length} indicadores a
               preencher.{" "}
             </>
           ) : null}
@@ -32,23 +35,28 @@ export function AbaIndicadores({ d }: { d: DiagnosticoCompleto }) {
           classeGatilho={classeBotao("primario")}
           acao={salvarIndicador.bind(null, d.id, null)}
         >
-          <CamposIndicador />
+          <CamposIndicador equipe={d.equipe} areas={d.responsaveis_area} />
         </PainelLateral>
       </div>
 
-      {d.indicadores.length === 0 && (
+      {lista.length === 0 && (
         <Cartao>
-          <Vazio>Nenhum indicador.</Vazio>
+          <Vazio>{de ? "Nenhum indicador com este responsável." : "Nenhum indicador."}</Vazio>
         </Cartao>
       )}
 
-      {agruparPorCategoria(d.indicadores).map(({ categoria, itens }) => (
+      {agruparPorCategoria(lista).map(({ categoria, itens }) => (
         <Cartao key={categoria} className="overflow-hidden">
-          <CabecalhoCartao titulo={categoria} />
+          <CabecalhoCartao titulo={categoria}>
+            <DonoDaArea d={d} categoria={categoria} />
+          </CabecalhoCartao>
           <table className={t.tabela}>
             <thead className={t.cabeca}>
               <tr>
                 <th className={`${t.th} sm:w-72`}>Indicador</th>
+                <th className={`${t.th} w-12`}>
+                  <span className="sr-only">Responsável</span>
+                </th>
                 <th className={`${t.th} w-32 text-right sm:w-40`}>Valor</th>
                 <th className={`${t.th} hidden w-36 sm:table-cell`}>Referência</th>
                 <th className={`${t.th} hidden lg:table-cell`}>Análise</th>
@@ -69,13 +77,16 @@ export function AbaIndicadores({ d }: { d: DiagnosticoCompleto }) {
                           <BotaoExcluir acao={excluirIndicador.bind(null, i.id)} pergunta={`Excluir “${i.nome}”?`} />
                         }
                       >
-                        <CamposIndicador indicador={i} />
+                        <CamposIndicador indicador={i} equipe={d.equipe} areas={d.responsaveis_area} />
                       </PainelLateral>
                       {i.periodo && <div className="text-xs text-slate-500">{i.periodo}</div>}
                       {i.referencia && <div className="text-xs text-slate-500 sm:hidden">Referência {i.referencia}</div>}
                       {i.observacao && (
                         <div className="mt-1 line-clamp-2 text-xs text-slate-600 lg:hidden">{i.observacao}</div>
                       )}
+                    </td>
+                    <td className={`${t.td} pr-0`}>
+                      <ResponsavelDoItem d={d} item={i} />
                     </td>
                     <td className={`${t.td} text-right tabular-nums`}>
                       {valor ? (
