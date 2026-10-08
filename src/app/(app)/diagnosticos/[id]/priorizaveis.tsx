@@ -1,0 +1,221 @@
+import { BotaoExcluir, SeletorImediato } from "@/components/controles";
+import { EtiquetaPrioridade } from "@/components/etiquetas";
+import { CamposAcao, CamposAchado, CamposOportunidade } from "@/components/formularios";
+import { PainelLateral } from "@/components/painel-lateral";
+import { Cartao, Etiqueta, Vazio, classeBotao } from "@/components/ui";
+import { NOTAS, STATUS_ACHADO, STATUS_OPORTUNIDADE, type Achado, type Oportunidade } from "@/lib/dominio";
+import type { DiagnosticoCompleto } from "@/lib/consultas";
+import {
+  excluirAchado,
+  excluirOportunidade,
+  mudarStatusAchado,
+  mudarStatusOportunidade,
+  salvarAchado,
+  salvarOportunidade,
+} from "@/server/analise";
+import { salvarAcao } from "@/server/plano";
+
+function Notas({ item }: { item: Achado | Oportunidade }) {
+  const notas = [
+    ["Impacto", NOTAS.impacto[item.nota_impacto - 1]],
+    ["Urgência", NOTAS.urgencia[item.nota_urgencia - 1]],
+    ["Esforço", NOTAS.esforco[item.nota_esforco - 1]],
+  ];
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+      {notas.map(([rotulo, valor]) => (
+        <span key={rotulo}>
+          {rotulo}: <span className="font-medium text-slate-700">{valor}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Detalhe({ rotulo, texto }: { rotulo: string; texto: string | null }) {
+  if (!texto) return null;
+  return (
+    <div>
+      <dt className="text-xs font-medium text-slate-500">{rotulo}</dt>
+      <dd className="line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">{texto}</dd>
+    </div>
+  );
+}
+
+function ResumoPrioridades({ itens }: { itens: (Achado | Oportunidade)[] }) {
+  const n = (p: string) => itens.filter((i) => i.prioridade === p).length;
+  return (
+    <div className="flex items-center gap-2 text-sm text-slate-500">
+      <EtiquetaPrioridade prioridade="Alta" /> {n("Alta")}
+      <EtiquetaPrioridade prioridade="Média" /> {n("Média")}
+      <EtiquetaPrioridade prioridade="Baixa" /> {n("Baixa")}
+    </div>
+  );
+}
+
+export function AbaAchados({ d }: { d: DiagnosticoCompleto }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ResumoPrioridades itens={d.achados} />
+        <PainelLateral
+          titulo="Novo achado"
+          gatilho="+ Achado"
+          classeGatilho={classeBotao("primario")}
+          acao={salvarAchado.bind(null, d.id, null)}
+        >
+          <CamposAchado />
+        </PainelLateral>
+      </div>
+
+      {d.achados.length === 0 && (
+        <Cartao>
+          <Vazio>Nenhum problema registrado ainda.</Vazio>
+        </Cartao>
+      )}
+
+      {d.achados.map((a) => (
+        <Cartao key={a.id} className="p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <EtiquetaPrioridade prioridade={a.prioridade} manual={!!a.prioridade_manual} />
+                <Etiqueta>{a.categoria}</Etiqueta>
+              </div>
+              <PainelLateral
+                titulo="Achado"
+                gatilho={a.titulo}
+                classeGatilho="text-left text-base font-semibold text-slate-900 hover:text-marca-700"
+                acao={salvarAchado.bind(null, d.id, a.id)}
+                rodape={<BotaoExcluir acao={excluirAchado.bind(null, a.id)} pergunta={`Excluir “${a.titulo}”?`} />}
+              >
+                <CamposAchado achado={a} />
+              </PainelLateral>
+              {a.descricao && <p className="mt-1 line-clamp-2 text-sm text-slate-600">{a.descricao}</p>}
+            </div>
+            <div className="flex items-center gap-2">
+              <SeletorImediato
+                key={a.status}
+                rotulo="Status"
+                valor={a.status}
+                opcoes={STATUS_ACHADO}
+                acao={mudarStatusAchado.bind(null, a.id)}
+                className="text-slate-700"
+              />
+              <PainelLateral
+                titulo="Nova ação"
+                gatilho="Criar ação"
+                classeGatilho={classeBotao("secundario", true)}
+                acao={salvarAcao.bind(null, d.id, null)}
+              >
+                <CamposAcao
+                  achados={d.achados}
+                  oportunidades={d.oportunidades}
+                  relacionadoPadrao={`achado:${a.id}`}
+                  prioridadePadrao={a.prioridade}
+                />
+              </PainelLateral>
+            </div>
+          </div>
+          <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Detalhe rotulo="Evidência" texto={a.evidencia} />
+            <Detalhe rotulo="Causa provável" texto={a.causa_provavel} />
+            <Detalhe rotulo="Impacto" texto={a.impacto} />
+          </dl>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+            <Notas item={a} />
+            <AcoesVinculadas n={d.acoes.filter((x) => x.achado_id === a.id).length} />
+          </div>
+        </Cartao>
+      ))}
+    </div>
+  );
+}
+
+export function AbaOportunidades({ d }: { d: DiagnosticoCompleto }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ResumoPrioridades itens={d.oportunidades} />
+        <PainelLateral
+          titulo="Nova oportunidade"
+          gatilho="+ Oportunidade"
+          classeGatilho={classeBotao("primario")}
+          acao={salvarOportunidade.bind(null, d.id, null)}
+        >
+          <CamposOportunidade />
+        </PainelLateral>
+      </div>
+
+      {d.oportunidades.length === 0 && (
+        <Cartao>
+          <Vazio>Nenhuma oportunidade registrada ainda.</Vazio>
+        </Cartao>
+      )}
+
+      {d.oportunidades.map((o) => (
+        <Cartao key={o.id} className="p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <EtiquetaPrioridade prioridade={o.prioridade} manual={!!o.prioridade_manual} />
+                <Etiqueta>{o.categoria}</Etiqueta>
+              </div>
+              <PainelLateral
+                titulo="Oportunidade"
+                gatilho={o.titulo}
+                classeGatilho="text-left text-base font-semibold text-slate-900 hover:text-marca-700"
+                acao={salvarOportunidade.bind(null, d.id, o.id)}
+                rodape={
+                  <BotaoExcluir acao={excluirOportunidade.bind(null, o.id)} pergunta={`Excluir “${o.titulo}”?`} />
+                }
+              >
+                <CamposOportunidade oportunidade={o} />
+              </PainelLateral>
+              {o.descricao && <p className="mt-1 line-clamp-2 text-sm text-slate-600">{o.descricao}</p>}
+            </div>
+            <div className="flex items-center gap-2">
+              <SeletorImediato
+                key={o.status}
+                rotulo="Status"
+                valor={o.status}
+                opcoes={STATUS_OPORTUNIDADE}
+                acao={mudarStatusOportunidade.bind(null, o.id)}
+                className="text-slate-700"
+              />
+              <PainelLateral
+                titulo="Nova ação"
+                gatilho="Criar ação"
+                classeGatilho={classeBotao("secundario", true)}
+                acao={salvarAcao.bind(null, d.id, null)}
+              >
+                <CamposAcao
+                  achados={d.achados}
+                  oportunidades={d.oportunidades}
+                  relacionadoPadrao={`oportunidade:${o.id}`}
+                  prioridadePadrao={o.prioridade}
+                />
+              </PainelLateral>
+            </div>
+          </div>
+          <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Detalhe rotulo="Potencial impacto" texto={o.potencial_impacto} />
+            <Detalhe rotulo="Esforço estimado" texto={o.esforco_estimado} />
+          </dl>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+            <Notas item={o} />
+            <AcoesVinculadas n={d.acoes.filter((x) => x.oportunidade_id === o.id).length} />
+          </div>
+        </Cartao>
+      ))}
+    </div>
+  );
+}
+
+function AcoesVinculadas({ n }: { n: number }) {
+  return (
+    <span className="text-xs text-slate-500">
+      {n === 0 ? "Sem ações no plano" : `${n} ${n > 1 ? "ações" : "ação"} no plano`}
+    </span>
+  );
+}
