@@ -18,7 +18,7 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
     <div className="space-y-4">
       <Cartao className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-64 flex-1">
+          <div className="min-w-0 basis-64 flex-1">
             <div className="mb-1.5 flex justify-between text-sm">
               <span className="font-medium text-slate-900">
                 {recebidos} de {total} itens recebidos
@@ -63,14 +63,14 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
 
       {d.solicitacoes.length === 0 && (
         <Cartao>
-          <Vazio>Nenhum item solicitado.</Vazio>
+          <Vazio>Nenhum item na lista de coleta. Use “+ Item” para pedir um documento ao cliente.</Vazio>
         </Cartao>
       )}
 
       {agruparPorCategoria(d.solicitacoes).map(({ categoria, itens }) => {
         const r = resumoColeta(itens);
         return (
-          <Cartao key={categoria} className="overflow-x-auto">
+          <Cartao key={categoria} className="overflow-hidden">
             <CabecalhoCartao titulo={categoria}>
               <span className="text-xs text-slate-500">
                 {r.recebidos}/{r.total} recebidos
@@ -80,10 +80,10 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
               <thead className={t.cabeca}>
                 <tr>
                   <th className={t.th}>Item</th>
-                  <th className={`${t.th} w-44`}>Status</th>
-                  <th className={`${t.th} w-28`}>Solicitado</th>
-                  <th className={`${t.th} w-28`}>Recebido</th>
-                  <th className={`${t.th} w-16`}></th>
+                  <th className={`${t.th} w-40`}>Status</th>
+                  <th className={`${t.th} hidden w-28 md:table-cell`}>Solicitado</th>
+                  <th className={`${t.th} hidden w-28 md:table-cell`}>Recebido</th>
+                  <th className={`${t.th} hidden w-16 sm:table-cell`}></th>
                 </tr>
               </thead>
               <tbody>
@@ -102,28 +102,32 @@ export function AbaColeta({ d }: { d: DiagnosticoCompleto }) {
                         <CamposSolicitacao solicitacao={s} />
                       </PainelLateral>
                       {s.observacao && <div className="mt-0.5 text-xs text-slate-500">{s.observacao}</div>}
+                      {(s.data_recebimento || s.data_solicitacao || s.link) && (
+                        <div className="mt-0.5 flex gap-2 text-xs text-slate-500 md:hidden">
+                          {s.data_recebimento
+                            ? `Recebido em ${formatarData(s.data_recebimento)}`
+                            : s.data_solicitacao && `Solicitado em ${formatarData(s.data_solicitacao)}`}
+                          {s.link && (
+                            <a href={s.link} target="_blank" rel="noreferrer" className="text-marca-700 sm:hidden">
+                              Abrir ↗
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-2 py-1.5 align-top">
+                    <td className={t.td}>
                       <SeletorImediato
                         key={s.status}
+                        etiqueta
                         rotulo="Status"
                         valor={s.status}
                         opcoes={STATUS_SOLICITACAO}
                         acao={mudarStatusSolicitacao.bind(null, s.id)}
-                        className={
-                          s.status === "Recebido"
-                            ? "text-emerald-700"
-                            : s.status === "Solicitado"
-                              ? "text-amber-700"
-                              : s.status === "Não disponível"
-                                ? "text-red-600"
-                                : "text-slate-600"
-                        }
                       />
                     </td>
-                    <td className={`${t.td} text-slate-600`}>{formatarData(s.data_solicitacao)}</td>
-                    <td className={`${t.td} text-slate-600`}>{formatarData(s.data_recebimento)}</td>
-                    <td className={t.td}>
+                    <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{formatarData(s.data_solicitacao)}</td>
+                    <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{formatarData(s.data_recebimento)}</td>
+                    <td className={`${t.td} hidden sm:table-cell`}>
                       {s.link && (
                         <a href={s.link} target="_blank" rel="noreferrer" className="text-marca-700 hover:underline">
                           Abrir

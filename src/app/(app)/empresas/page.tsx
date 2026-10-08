@@ -48,25 +48,50 @@ export default async function Empresas({ searchParams }: PageProps<"/empresas">)
         </PainelLateral>
       </CabecalhoPagina>
 
-      <form className="mb-4 max-w-sm">
-        <input
-          name="busca"
-          defaultValue={termo}
-          placeholder="Buscar por nome ou CNPJ"
-          className={classeInput}
-        />
+      <form role="search" className="mb-4 flex max-w-sm items-center gap-2">
+        <div className="relative flex-1">
+          <svg
+            aria-hidden
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400"
+          >
+            <path
+              fillRule="evenodd"
+              d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.45 4.39l3.08 3.08a.75.75 0 11-1.06 1.06l-3.08-3.08A7 7 0 012 9z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <input
+            type="search"
+            name="busca"
+            aria-label="Buscar empresa"
+            defaultValue={termo}
+            placeholder="Buscar por nome ou CNPJ"
+            className={`${classeInput} pl-9`}
+          />
+        </div>
+        {termo && (
+          <Link href="/empresas" className="text-sm text-slate-500 hover:text-slate-900">
+            Limpar
+          </Link>
+        )}
       </form>
 
-      <Cartao className="overflow-x-auto">
+      <Cartao className="overflow-hidden">
         {empresas.length === 0 ? (
-          <Vazio>{termo ? "Nenhuma empresa encontrada." : "Nenhuma empresa cadastrada ainda."}</Vazio>
+          <Vazio>
+            {termo
+              ? `Nenhuma empresa encontrada para “${termo}”.`
+              : "Nenhuma empresa cadastrada ainda. Use “Nova empresa” para cadastrar o primeiro cliente."}
+          </Vazio>
         ) : (
           <table className={t.tabela}>
             <thead className={t.cabeca}>
               <tr>
                 <th className={t.th}>Empresa</th>
-                <th className={t.th}>Segmento</th>
-                <th className={t.th}>Responsável</th>
+                <th className={`${t.th} hidden md:table-cell`}>Segmento</th>
+                <th className={`${t.th} hidden sm:table-cell`}>Responsável</th>
                 <th className={t.th}>Último diagnóstico</th>
               </tr>
             </thead>
@@ -84,11 +109,13 @@ export default async function Empresas({ searchParams }: PageProps<"/empresas">)
                       </Link>
                       {e.cnpj && <div className="text-xs text-slate-500">{e.cnpj}</div>}
                     </td>
-                    <td className={t.td}>{e.segmento}</td>
-                    <td className={t.td}>{responsavel?.nome ?? <span className="text-slate-400">—</span>}</td>
+                    <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{e.segmento}</td>
+                    <td className={`${t.td} hidden text-slate-600 sm:table-cell`}>
+                      {responsavel?.nome ?? <span className="text-slate-400">—</span>}
+                    </td>
                     <td className={t.td}>
                       {ultimo ? (
-                        <Link href={`/diagnosticos/${ultimo.id}`} className="flex items-center gap-2 hover:text-marca-700">
+                        <Link href={`/diagnosticos/${ultimo.id}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 hover:text-marca-700">
                           <span>{formatarPeriodo(ultimo.periodo_inicio, ultimo.periodo_fim)}</span>
                           <EtiquetaStatus status={ultimo.status} />
                         </Link>

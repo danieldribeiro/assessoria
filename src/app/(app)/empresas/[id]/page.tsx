@@ -44,11 +44,11 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
 
   return (
     <>
-      <div className="mb-2 text-sm">
-        <Link href="/empresas" className="text-slate-500 hover:text-slate-900">
-          ← Empresas
+      <nav aria-label="Caminho" className="mb-2 text-sm text-slate-500">
+        <Link href="/empresas" className="hover:text-slate-900">
+          Empresas
         </Link>
-      </div>
+      </nav>
       <CabecalhoPagina
         titulo={empresa.nome}
         subtitulo={[empresa.segmento, empresa.cnpj].filter(Boolean).join(" · ")}
@@ -94,8 +94,8 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
                   <tr>
                     <th className={t.th}>Período</th>
                     <th className={t.th}>Status</th>
-                    <th className={t.th}>Responsável</th>
-                    <th className={t.th}>Início</th>
+                    <th className={`${t.th} hidden md:table-cell`}>Responsável</th>
+                    <th className={`${t.th} hidden sm:table-cell`}>Início</th>
                     <th className={t.th}>Entrega</th>
                   </tr>
                 </thead>
@@ -110,8 +110,8 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
                       <td className={t.td}>
                         <EtiquetaStatus status={d.status} />
                       </td>
-                      <td className={t.td}>{d.responsavel?.nome ?? "—"}</td>
-                      <td className={t.td}>{formatarData(d.data_inicio)}</td>
+                      <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{d.responsavel?.nome ?? "—"}</td>
+                      <td className={`${t.td} hidden text-slate-600 sm:table-cell`}>{formatarData(d.data_inicio)}</td>
                       <td className={t.td}>{formatarData(d.data_prevista)}</td>
                     </tr>
                   ))}
@@ -140,7 +140,7 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
             </PainelLateral>
           </CabecalhoCartao>
           {empresa.contatos.length === 0 ? (
-            <Vazio>Nenhum contato.</Vazio>
+            <Vazio>Nenhum contato. Cadastre ao menos o responsável pelas informações.</Vazio>
           ) : (
             <ul className="divide-y divide-slate-100">
               {empresa.contatos.map((c) => (

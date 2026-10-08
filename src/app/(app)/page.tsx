@@ -59,8 +59,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
 
   const supabase = await criarCliente();
   const emAndamento = ["Coleta", "Em análise", "Revisão", "Apresentação"];
-  const [empresas, diagnosticos, achados, oportunidades, acoes] = await Promise.all([
-    supabase.from("empresas").select("id", { count: "exact", head: true }),
+  const [diagnosticos, achados, oportunidades, acoes] = await Promise.all([
     supabase
       .from("diagnosticos")
       .select(
@@ -95,8 +94,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
   const atrasadas = pendentes.filter((a) => atrasada(a.prazo, a.status)).length;
 
   const numeros: { rotulo: string; valor: number; href: string; filtro?: Filtro; alerta?: boolean }[] = [
-    { rotulo: "Clientes", valor: empresas.count ?? 0, href: "/empresas" },
-    { rotulo: "Diagnósticos em andamento", valor: lista.length, href: "/", filtro: "todos" },
+    { rotulo: "Em andamento", valor: lista.length, href: "/", filtro: "todos" },
     {
       rotulo: "Aguardando informações",
       valor: lista.filter(FILTROS.aguardando.teste).length,
@@ -119,7 +117,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
     <>
       <CabecalhoPagina titulo="Painel" />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         {numeros.map((n) => (
           <Link
             key={n.rotulo}
@@ -137,7 +135,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
         ))}
       </div>
 
-      <Cartao className="mb-6 overflow-x-auto">
+      <Cartao className="mb-6 overflow-hidden">
         <CabecalhoCartao titulo={FILTROS[filtro].rotulo} contagem={filtrados.length}>
           {filtro !== "todos" && (
             <Link href="/" className="text-xs text-marca-700 hover:underline">
@@ -146,15 +144,27 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
           )}
         </CabecalhoCartao>
         {filtrados.length === 0 ? (
-          <Vazio>Nenhum diagnóstico aqui.</Vazio>
+          <Vazio>
+            {filtro === "todos" ? (
+              <>
+                Nenhum diagnóstico em andamento. Para começar, abra uma{" "}
+                <Link href="/empresas" className="font-medium text-marca-700 hover:underline">
+                  empresa
+                </Link>{" "}
+                e crie um diagnóstico.
+              </>
+            ) : (
+              "Nenhum diagnóstico nesta situação."
+            )}
+          </Vazio>
         ) : (
           <table className={t.tabela}>
             <thead className={t.cabeca}>
               <tr>
                 <th className={t.th}>Empresa</th>
                 <th className={t.th}>Status</th>
-                <th className={t.th}>Responsável</th>
-                <th className={t.th}>Coleta</th>
+                <th className={`${t.th} hidden md:table-cell`}>Responsável</th>
+                <th className={`${t.th} hidden sm:table-cell`}>Coleta</th>
                 <th className={t.th}>Entrega</th>
               </tr>
             </thead>
@@ -180,8 +190,8 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                     <td className={t.td}>
                       <EtiquetaStatus status={d.status} />
                     </td>
-                    <td className={`${t.td} text-slate-600`}>{d.responsavel?.nome ?? "—"}</td>
-                    <td className={t.td}>
+                    <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{d.responsavel?.nome ?? "—"}</td>
+                    <td className={`${t.td} hidden sm:table-cell`}>
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
                           <div
@@ -195,17 +205,19 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                       </div>
                     </td>
                     <td className={t.td}>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="text-slate-700">{formatarData(d.data_prevista)}</span>
                       {dias !== null && dias < 0 && (
-                        <Etiqueta tom="vermelho" className="ml-2">
+                        <Etiqueta tom="vermelho" >
                           atrasado
                         </Etiqueta>
                       )}
                       {dias !== null && dias >= 0 && dias <= 2 && (
-                        <Etiqueta tom="ambar" className="ml-2">
+                        <Etiqueta tom="ambar" >
                           {dias === 0 ? "hoje" : `${dias} d.u.`}
                         </Etiqueta>
                       )}
+                      </div>
                     </td>
                   </tr>
                 );

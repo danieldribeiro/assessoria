@@ -7,11 +7,18 @@ import { agruparPorCategoria, type DiagnosticoCompleto } from "@/lib/consultas";
 import { excluirIndicador, salvarIndicador } from "@/server/analise";
 
 export function AbaIndicadores({ d }: { d: DiagnosticoCompleto }) {
+  const faltam = d.indicadores.filter((i) => i.valor === null).length;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-500">
-          Registre aqui o resultado dos cálculos feitos na planilha de trabalho e a leitura da equipe sobre cada número.
+          {faltam > 0 ? (
+            <>
+              <span className="font-medium text-slate-900">{faltam}</span> de {d.indicadores.length} indicadores a
+              preencher.{" "}
+            </>
+          ) : null}
+          Copie os valores da planilha de análise e registre a leitura da equipe sobre cada número.
         </p>
         <PainelLateral
           titulo="Novo indicador"
@@ -30,15 +37,15 @@ export function AbaIndicadores({ d }: { d: DiagnosticoCompleto }) {
       )}
 
       {agruparPorCategoria(d.indicadores).map(({ categoria, itens }) => (
-        <Cartao key={categoria} className="overflow-x-auto">
+        <Cartao key={categoria} className="overflow-hidden">
           <CabecalhoCartao titulo={categoria} />
           <table className={t.tabela}>
             <thead className={t.cabeca}>
               <tr>
-                <th className={`${t.th} w-72`}>Indicador</th>
-                <th className={`${t.th} w-40 text-right`}>Valor</th>
-                <th className={`${t.th} w-36`}>Referência</th>
-                <th className={t.th}>Análise</th>
+                <th className={`${t.th} sm:w-72`}>Indicador</th>
+                <th className={`${t.th} w-32 text-right sm:w-40`}>Valor</th>
+                <th className={`${t.th} hidden w-36 sm:table-cell`}>Referência</th>
+                <th className={`${t.th} hidden lg:table-cell`}>Análise</th>
               </tr>
             </thead>
             <tbody>
@@ -59,6 +66,10 @@ export function AbaIndicadores({ d }: { d: DiagnosticoCompleto }) {
                         <CamposIndicador indicador={i} />
                       </PainelLateral>
                       {i.periodo && <div className="text-xs text-slate-500">{i.periodo}</div>}
+                      {i.referencia && <div className="text-xs text-slate-500 sm:hidden">Referência {i.referencia}</div>}
+                      {i.observacao && (
+                        <div className="mt-1 line-clamp-2 text-xs text-slate-600 lg:hidden">{i.observacao}</div>
+                      )}
                     </td>
                     <td className={`${t.td} text-right tabular-nums`}>
                       {valor ? (
@@ -67,8 +78,8 @@ export function AbaIndicadores({ d }: { d: DiagnosticoCompleto }) {
                         <span className="text-slate-400">a preencher</span>
                       )}
                     </td>
-                    <td className={`${t.td} text-slate-600`}>{i.referencia ?? "—"}</td>
-                    <td className={`${t.td} max-w-md text-slate-600`}>
+                    <td className={`${t.td} hidden text-slate-600 sm:table-cell`}>{i.referencia ?? "—"}</td>
+                    <td className={`${t.td} hidden max-w-md text-slate-600 lg:table-cell`}>
                       <span className="line-clamp-2 whitespace-pre-wrap">{i.observacao ?? ""}</span>
                     </td>
                   </tr>

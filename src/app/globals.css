@@ -32,3 +32,35 @@ body {
 dialog::backdrop {
   background: rgb(15 23 42 / 0.35);
 }
+
+/* Foco visível só para teclado, sem poluir o clique. */
+:where(a, button, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-marca-600);
+  outline-offset: 2px;
+}
+
+/* Painel lateral desliza da direita; avisos sobem de leve. */
+dialog[open] {
+  animation: painel-entrada 0.18s ease-out;
+}
+@keyframes painel-entrada {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+.aviso-entrada {
+  animation: aviso-entrada 0.18s ease-out;
+}
+@keyframes aviso-entrada {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog[open],
+  .aviso-entrada {
+    animation: none;
+  }
+}

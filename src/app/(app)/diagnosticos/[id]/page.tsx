@@ -74,23 +74,37 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
 
   return (
     <>
-      <div className="mb-2 text-sm">
-        <Link href={`/empresas/${d.empresa.id}`} className="text-slate-500 hover:text-slate-900">
-          ← {d.empresa.nome}
+      <nav aria-label="Caminho" className="mb-2 flex items-center gap-1.5 text-sm text-slate-500">
+        <Link href="/empresas" className="hover:text-slate-900">
+          Empresas
         </Link>
-      </div>
+        <span aria-hidden>/</span>
+        <Link href={`/empresas/${d.empresa.id}`} className="truncate hover:text-slate-900">
+          {d.empresa.nome}
+        </Link>
+      </nav>
 
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-            Diagnóstico {d.empresa.nome}
-          </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-            <span>Período {formatarPeriodo(d.periodo_inicio, d.periodo_fim)}</span>
-            <span>Responsável {d.responsavel?.nome ?? "—"}</span>
-            <span>Início {formatarData(d.data_inicio)}</span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+              Diagnóstico {formatarPeriodo(d.periodo_inicio, d.periodo_fim)}
+            </h1>
+            <SeletorImediato
+              key={d.status}
+              etiqueta
+              rotulo="Etapa do diagnóstico"
+              valor={d.status}
+              opcoes={STATUS_DIAGNOSTICO}
+              acao={mudarStatusDiagnostico.bind(null, d.id)}
+            />
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
+            <span>
+              Responsável <span className="text-slate-700">{d.responsavel?.nome ?? "—"}</span>
+            </span>
             <span className="flex items-center gap-1.5">
-              Entrega {formatarData(d.data_prevista)}
+              Entrega <span className="text-slate-700">{formatarData(d.data_prevista)}</span>
               {prazo !== null &&
                 (prazo < 0 ? (
                   <Etiqueta tom="vermelho">atrasado</Etiqueta>
@@ -108,17 +122,6 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-md border border-slate-300 bg-white pl-3 shadow-sm">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</span>
-            <SeletorImediato
-              key={d.status}
-              rotulo="Status do diagnóstico"
-              valor={d.status}
-              opcoes={STATUS_DIAGNOSTICO}
-              acao={mudarStatusDiagnostico.bind(null, d.id)}
-              className="font-medium text-slate-900"
-            />
-          </div>
           <PainelLateral
             titulo="Editar diagnóstico"
             gatilho="Editar"
@@ -139,11 +142,12 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
         </div>
       </div>
 
-      <nav className="mb-6 overflow-x-auto">
+      <nav aria-label="Etapas do diagnóstico" className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <ol className="flex min-w-max items-stretch gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           <li>
             <Link
               href={`/diagnosticos/${d.id}`}
+              aria-current={aba === "visao" ? "page" : undefined}
               className={cx(
                 "flex h-full flex-col justify-center rounded-md px-4 py-2 text-sm font-medium",
                 aba === "visao" ? "bg-marca-600 text-white" : "text-slate-600 hover:bg-slate-50",
@@ -163,8 +167,9 @@ export default async function PaginaDiagnostico({ params, searchParams }: PagePr
               )}
               <Link
                 href={`/diagnosticos/${d.id}?aba=${e.aba}`}
+                aria-current={aba === e.aba ? "page" : undefined}
                 className={cx(
-                  "flex min-w-32 flex-col rounded-md px-4 py-2",
+                  "flex min-w-28 flex-col rounded-md px-3 py-2 sm:min-w-32 sm:px-4",
                   aba === e.aba ? "bg-marca-600 text-white" : "hover:bg-slate-50",
                 )}
               >
