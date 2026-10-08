@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { avisar } from "@/components/avisos";
 import { Botao, cx } from "@/components/ui";
 
 export type ResultadoAcao = { erro?: string } | void;
@@ -13,6 +14,7 @@ export function PainelLateral({
   classeGatilho,
   acao,
   rotuloSalvar = "Salvar",
+  aviso = "Alterações salvas",
   rodape,
   children,
 }: {
@@ -21,6 +23,7 @@ export function PainelLateral({
   classeGatilho?: string;
   acao: (dados: FormData) => Promise<ResultadoAcao>;
   rotuloSalvar?: string;
+  aviso?: string;
   rodape?: ReactNode;
   children: ReactNode;
 }) {
@@ -46,6 +49,7 @@ export function PainelLateral({
         return;
       }
       dialogo.current?.close();
+      avisar(aviso);
     });
   }
 

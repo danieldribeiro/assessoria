@@ -22,10 +22,10 @@ export function AbaPlano({ d }: { d: DiagnosticoCompleto }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-4 text-sm text-slate-500">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
           {STATUS_ACAO.map((s) => (
             <span key={s}>
-              {s}: <span className="font-medium text-slate-900">{conta(s)}</span>
+              {s} <span className="tabular-nums font-medium text-slate-900">{conta(s)}</span>
             </span>
           ))}
         </div>
@@ -39,18 +39,18 @@ export function AbaPlano({ d }: { d: DiagnosticoCompleto }) {
         </PainelLateral>
       </div>
 
-      <Cartao className="overflow-x-auto">
+      <Cartao className="overflow-hidden">
         {d.acoes.length === 0 ? (
-          <Vazio>Nenhuma ação no plano. Crie ações aqui ou direto num achado ou oportunidade.</Vazio>
+          <Vazio>Nenhuma ação no plano ainda. Crie aqui ou pelo botão “+ Ação” de um achado ou oportunidade.</Vazio>
         ) : (
           <table className={t.tabela}>
             <thead className={t.cabeca}>
               <tr>
                 <th className={t.th}>Ação</th>
-                <th className={t.th}>Responsável</th>
-                <th className={`${t.th} w-28`}>Prazo</th>
-                <th className={`${t.th} w-24`}>Prioridade</th>
-                <th className={`${t.th} w-40`}>Status</th>
+                <th className={`${t.th} hidden md:table-cell`}>Responsável</th>
+                <th className={`${t.th} hidden w-28 sm:table-cell`}>Prazo</th>
+                <th className={`${t.th} hidden w-24 md:table-cell`}>Prioridade</th>
+                <th className={`${t.th} w-36`}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -74,22 +74,37 @@ export function AbaPlano({ d }: { d: DiagnosticoCompleto }) {
                           {a.achado_id ? "Achado" : "Oportunidade"}: {relacionado}
                         </div>
                       )}
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 md:hidden">
+                        <EtiquetaPrioridade prioridade={a.prioridade} />
+                        {a.responsavel && <span>{a.responsavel}</span>}
+                        {a.prazo && (
+                          <span className={cx("sm:hidden", atrasada(a.prazo, a.status) && "font-medium text-red-600")}>
+                            até {formatarData(a.prazo)}
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className={`${t.td} text-slate-600`}>{a.responsavel ?? "—"}</td>
-                    <td className={cx(t.td, atrasada(a.prazo, a.status) ? "font-medium text-red-600" : "text-slate-600")}>
+                    <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{a.responsavel ?? "—"}</td>
+                    <td
+                      className={cx(
+                        t.td,
+                        "hidden sm:table-cell",
+                        atrasada(a.prazo, a.status) ? "font-medium text-red-600" : "text-slate-600",
+                      )}
+                    >
                       {formatarData(a.prazo)}
                     </td>
-                    <td className={t.td}>
+                    <td className={`${t.td} hidden md:table-cell`}>
                       <EtiquetaPrioridade prioridade={a.prioridade} />
                     </td>
-                    <td className="px-2 py-1.5 align-top">
+                    <td className={t.td}>
                       <SeletorImediato
                         key={a.status}
+                        etiqueta
                         rotulo="Status"
                         valor={a.status}
                         opcoes={STATUS_ACAO}
                         acao={mudarStatusAcao.bind(null, a.id)}
-                        className="text-slate-700"
                       />
                     </td>
                   </tr>

@@ -15,7 +15,7 @@ const variantes = {
 
 export function classeBotao(variante: keyof typeof variantes = "primario", pequeno = false) {
   return cx(
-    "inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none cursor-pointer",
+    "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none cursor-pointer",
     pequeno ? "h-7 px-2.5 text-xs" : "h-9 px-3.5 text-sm",
     variantes[variante],
   );
@@ -153,7 +153,7 @@ export function Vazio({ children }: { children: ReactNode }) {
   return <div className="px-4 py-8 text-center text-sm text-slate-500">{children}</div>;
 }
 
-const tons = {
+export const tons = {
   cinza: "bg-slate-100 text-slate-700 ring-slate-200",
   azul: "bg-marca-50 text-marca-700 ring-marca-100",
   verde: "bg-emerald-50 text-emerald-700 ring-emerald-200",

@@ -29,8 +29,12 @@ const TOM_STATUS: Record<string, Tom> = {
   Cancelada: "cinza",
 };
 
+export function tomDoStatus(status: string): Tom {
+  return TOM_STATUS[status] ?? "cinza";
+}
+
 export function EtiquetaStatus({ status }: { status: string }) {
-  return <Etiqueta tom={TOM_STATUS[status] ?? "cinza"}>{status}</Etiqueta>;
+  return <Etiqueta tom={tomDoStatus(status)}>{status}</Etiqueta>;
 }
 
 const TOM_PRIORIDADE: Record<Prioridade, Tom> = { Alta: "vermelho", Média: "ambar", Baixa: "cinza" };

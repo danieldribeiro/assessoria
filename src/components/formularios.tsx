@@ -1,10 +1,9 @@
 // Campos dos formulários. O <form> e o botão Salvar vêm do PainelLateral.
 
-import { NotaUmATres } from "@/components/controles";
+import { PriorizacaoAoVivo } from "@/components/controles";
 import { AreaTexto, Campo, Entrada, Selecao, classeInput } from "@/components/ui";
 import {
   CATEGORIAS,
-  NOTAS,
   PRIORIDADES,
   SEGMENTOS,
   STATUS_ACAO,
@@ -212,25 +211,7 @@ function CamposPriorizacao({
 }: {
   item?: { nota_impacto: number; nota_urgencia: number; nota_esforco: number; prioridade_manual: string | null };
 }) {
-  return (
-    <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <p className="text-sm font-semibold text-slate-900">Priorização</p>
-      <NotaUmATres nome="nota_impacto" rotulo="Impacto" legendas={NOTAS.impacto} valor={item?.nota_impacto} />
-      <NotaUmATres nome="nota_urgencia" rotulo="Urgência" legendas={NOTAS.urgencia} valor={item?.nota_urgencia} />
-      <NotaUmATres nome="nota_esforco" rotulo="Esforço" legendas={NOTAS.esforco} valor={item?.nota_esforco} />
-      <Campo
-        rotulo="Prioridade"
-        dica="Automática pela soma Impacto + Urgência + (4 − Esforço): 7 a 9 Alta, 5 e 6 Média, 3 e 4 Baixa"
-      >
-        <Selecao
-          name="prioridade_manual"
-          vazio="Automática"
-          opcoes={PRIORIDADES.map((p) => ({ valor: p, rotulo: `${p} (ajuste manual)` }))}
-          defaultValue={item?.prioridade_manual ?? ""}
-        />
-      </Campo>
-    </div>
-  );
+  return <PriorizacaoAoVivo item={item} />;
 }
 
 export function CamposAchado({ achado }: { achado?: Achado }) {
