@@ -4,7 +4,17 @@
 import type { Categoria } from "@/lib/dominio";
 
 type ModeloSolicitacao = { categoria: Categoria; item: string };
-type ModeloIndicador = { categoria: Categoria; nome: string; unidade: string | null };
+// Faixa de referência: ref_min e/ou ref_max alimentam o semáforo da central da clínica.
+// `significado` explica o indicador ao dono, em linguagem simples.
+type ModeloIndicador = {
+  categoria: Categoria;
+  nome: string;
+  unidade: string | null;
+  referencia?: string;
+  ref_min?: number;
+  ref_max?: number;
+  significado?: string;
+};
 
 type Modelo = { solicitacoes: ModeloSolicitacao[]; indicadores: ModeloIndicador[] };
 
@@ -34,27 +44,97 @@ const odontologia: Modelo = {
     { categoria: "Pessoas", item: "Quadro de equipe: funções, jornada e forma de contratação" },
   ],
   indicadores: [
-    { categoria: "Financeiro", nome: "Faturamento médio mensal", unidade: "R$" },
+    { categoria: "Financeiro", nome: "Faturamento médio mensal", unidade: "R$", significado: "Quanto a clínica fatura, em média, por mês." },
     { categoria: "Financeiro", nome: "Despesas fixas médias mensais", unidade: "R$" },
-    { categoria: "Financeiro", nome: "Custos variáveis sobre faturamento", unidade: "%" },
-    { categoria: "Financeiro", nome: "Margem de contribuição", unidade: "%" },
+    {
+      categoria: "Financeiro",
+      nome: "Custos variáveis sobre faturamento",
+      unidade: "%",
+      referencia: "até 40%",
+      ref_max: 40,
+      significado: "De cada R$ 100 faturados, quanto vai para repasses, materiais, laboratório e taxas de cartão.",
+    },
+    {
+      categoria: "Financeiro",
+      nome: "Margem de contribuição",
+      unidade: "%",
+      referencia: "60% ou mais",
+      ref_min: 60,
+      significado: "De cada R$ 100 faturados, quanto sobra para pagar as despesas fixas e gerar lucro.",
+    },
     { categoria: "Financeiro", nome: "Resultado líquido médio mensal", unidade: "R$" },
-    { categoria: "Financeiro", nome: "Margem líquida", unidade: "%" },
+    {
+      categoria: "Financeiro",
+      nome: "Margem líquida",
+      unidade: "%",
+      referencia: "10% a 15%",
+      ref_min: 10,
+      significado: "De cada R$ 100 faturados, quanto vira lucro depois de pagar tudo.",
+    },
     { categoria: "Financeiro", nome: "Ponto de equilíbrio mensal", unidade: "R$" },
-    { categoria: "Financeiro", nome: "Inadimplência", unidade: "%" },
+    {
+      categoria: "Financeiro",
+      nome: "Inadimplência",
+      unidade: "%",
+      referencia: "até 3%",
+      ref_max: 3,
+      significado: "Parte do que foi vendido e não foi pago no prazo.",
+    },
     { categoria: "Financeiro", nome: "Endividamento total", unidade: "R$" },
-    { categoria: "Financeiro", nome: "Parcelas de dívidas sobre faturamento", unidade: "%" },
-    { categoria: "Operacional", nome: "Taxa de ocupação da agenda", unidade: "%" },
+    {
+      categoria: "Financeiro",
+      nome: "Parcelas de dívidas sobre faturamento",
+      unidade: "%",
+      referencia: "até 5%",
+      ref_max: 5,
+      significado: "De cada R$ 100 faturados, quanto vai para pagar empréstimos e financiamentos.",
+    },
+    {
+      categoria: "Operacional",
+      nome: "Taxa de ocupação da agenda",
+      unidade: "%",
+      referencia: "85% ou mais",
+      ref_min: 85,
+      significado: "Parte dos horários disponíveis que foram de fato atendidos.",
+    },
     { categoria: "Operacional", nome: "Atendimentos por mês", unidade: "qtd" },
-    { categoria: "Operacional", nome: "Taxa de faltas", unidade: "%" },
+    {
+      categoria: "Operacional",
+      nome: "Taxa de faltas",
+      unidade: "%",
+      referencia: "até 10%",
+      ref_max: 10,
+      significado: "Parte dos pacientes agendados que não apareceram nem avisaram.",
+    },
     { categoria: "Operacional", nome: "Taxa de cancelamentos", unidade: "%" },
     { categoria: "Operacional", nome: "Faturamento por cadeira", unidade: "R$" },
-    { categoria: "Operacional", nome: "Custo de materiais sobre faturamento", unidade: "%" },
+    {
+      categoria: "Operacional",
+      nome: "Custo de materiais sobre faturamento",
+      unidade: "%",
+      referencia: "6% a 8%",
+      ref_max: 8,
+      significado: "De cada R$ 100 faturados, quanto é gasto com materiais.",
+    },
     { categoria: "Comercial", nome: "Pacientes novos por mês", unidade: "qtd" },
-    { categoria: "Comercial", nome: "Taxa de aceitação de orçamentos", unidade: "%" },
+    {
+      categoria: "Comercial",
+      nome: "Taxa de aceitação de orçamentos",
+      unidade: "%",
+      referencia: "55% a 65%",
+      ref_min: 55,
+      significado: "De cada 10 orçamentos apresentados, quantos os pacientes aprovam.",
+    },
     { categoria: "Comercial", nome: "Ticket médio por paciente", unidade: "R$" },
     { categoria: "Comercial", nome: "Pacientes inativos (sem retorno há mais de 12 meses)", unidade: "qtd" },
-    { categoria: "Pessoas", nome: "Folha de pagamento sobre faturamento", unidade: "%" },
+    {
+      categoria: "Pessoas",
+      nome: "Folha de pagamento sobre faturamento",
+      unidade: "%",
+      referencia: "até 25%",
+      ref_max: 25,
+      significado: "De cada R$ 100 faturados, quanto vai para salários e encargos da equipe.",
+    },
     { categoria: "Pessoas", nome: "Faturamento por profissional", unidade: "R$" },
   ],
 };

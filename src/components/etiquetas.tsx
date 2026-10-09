@@ -1,5 +1,5 @@
 import { Etiqueta, type Tom } from "@/components/ui";
-import type { Prioridade } from "@/lib/dominio";
+import { NOME_COR, type Cor, type Prioridade } from "@/lib/dominio";
 
 const TOM_STATUS: Record<string, Tom> = {
   // diagnóstico
@@ -62,6 +62,32 @@ export function EtiquetaPrioridade({
       />
       {prioridade}
       {manual && <span aria-hidden>*</span>}
+    </Etiqueta>
+  );
+}
+
+const ESTILO_COR: Record<Cor, { ponto: string; tom: Tom }> = {
+  bom: { ponto: "bg-emerald-500", tom: "verde" },
+  atencao: { ponto: "bg-amber-500", tom: "ambar" },
+  ruim: { ponto: "bg-red-500", tom: "vermelho" },
+};
+
+// Bolinha do semáforo ao lado do valor do indicador.
+export function PontoCor({ cor, className }: { cor: Cor | null; className?: string }) {
+  if (!cor) return null;
+  return (
+    <span
+      title={NOME_COR[cor]}
+      className={`inline-block size-2 shrink-0 rounded-full ${ESTILO_COR[cor].ponto} ${className ?? ""}`}
+    />
+  );
+}
+
+export function EtiquetaCor({ cor }: { cor: Cor }) {
+  return (
+    <Etiqueta tom={ESTILO_COR[cor].tom}>
+      <span className={`size-1.5 rounded-full ${ESTILO_COR[cor].ponto}`} />
+      {NOME_COR[cor]}
     </Etiqueta>
   );
 }

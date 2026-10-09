@@ -49,10 +49,13 @@ export function porPrioridade<T extends { prioridade: string }>(a: T, b: T) {
   );
 }
 
+export type Papel = "equipe" | "cliente";
+
 export type Perfil = {
   id: string;
   nome: string;
   email: string;
+  papel?: Papel;
   cargo?: string | null;
   telefone?: string | null;
   foto_url?: string | null;
@@ -139,6 +142,8 @@ export type Diagnostico = {
   situacao_atual: string | null;
   recomendacoes: string | null;
   observacoes: string | null;
+  publicado_em: string | null; // na central da clínica desde
+  recado: string | null; // recado da equipe que abre a central
 };
 
 export type Solicitacao = {
@@ -165,6 +170,11 @@ export type Indicador = {
   unidade: string | null;
   periodo: string | null;
   referencia: string | null;
+  ref_min: number | null;
+  ref_max: number | null;
+  tolerancia: number | null;
+  significado: string | null;
+  cor_manual: Cor | null;
   observacao: string | null;
   ordem: number;
 };
@@ -214,3 +224,24 @@ export type Acao = {
   status: StatusAcao;
   observacoes: string | null;
 };
+
+// Semáforo da central: cada indicador com faixa vira bom, atenção ou ruim.
+export const CORES = ["bom", "atencao", "ruim"] as const;
+export type Cor = (typeof CORES)[number];
+export const NOME_COR: Record<Cor, string> = { bom: "Está bom", atencao: "Atenção", ruim: "Precisa melhorar" };
+export const TOLERANCIA_PADRAO = 20; // % da referência que separa atenção de precisa melhorar
+
+export function corDoIndicador(i: Pick<Indicador, "valor" | "ref_min" | "ref_max" | "tolerancia" | "cor_manual">): Cor | null {
+  if (i.cor_manual) return i.cor_manual;
+  const { valor } = i;
+  const min = i.ref_min === null ? null : Number(i.ref_min);
+  const max = i.ref_max === null ? null : Number(i.ref_max);
+  if (valor === null || (min === null && max === null)) return null;
+  const v = Number(valor);
+  if ((min === null || v >= min) && (max === null || v <= max)) return "bom";
+  // Com as duas pontas, a folga sai da largura da faixa; com uma só, do próprio valor de referência.
+  const base = min !== null && max !== null ? max - min : Math.abs((min ?? max)!);
+  const folga = (base * (i.tolerancia ?? TOLERANCIA_PADRAO)) / 100;
+  const distancia = min !== null && v < min ? min - v : v - max!;
+  return distancia <= folga ? "atencao" : "ruim";
+}

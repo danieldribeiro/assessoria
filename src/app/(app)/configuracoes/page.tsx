@@ -1,16 +1,23 @@
 import { Briefcase, Settings, UserRound, Users } from "lucide-react";
 import { CamposCadastro, SeletorImagem } from "@/components/cadastro";
+import { BotaoAcao } from "@/components/controles";
 import { Formulario } from "@/components/formulario";
 import { AvatarResponsavel, iniciaisPessoa } from "@/components/responsaveis";
-import { CabecalhoCartao, CabecalhoPagina, Campo, Cartao, Entrada, Selecao, iniciais } from "@/components/ui";
+import { CabecalhoCartao, CabecalhoPagina, Campo, Cartao, Entrada, Selecao, classeBotao, iniciais } from "@/components/ui";
 import { REGIMES_TRIBUTARIOS } from "@/lib/dominio";
-import { carregarAssessoria, listarEquipe, usuarioAtual } from "@/lib/consultas";
+import { carregarAssessoria, contasAguardando, listarEquipe, usuarioAtual } from "@/lib/consultas";
+import { definirPapel } from "@/server/central";
 import { salvarAssessoria, salvarPerfil } from "@/server/configuracoes";
 
 export const metadata = { title: "Configurações" };
 
 export default async function PaginaConfiguracoes() {
-  const [usuario, equipe, assessoria] = await Promise.all([usuarioAtual(), listarEquipe(), carregarAssessoria()]);
+  const [usuario, equipe, assessoria, aguardando] = await Promise.all([
+    usuarioAtual(),
+    listarEquipe(),
+    carregarAssessoria(),
+    contasAguardando(),
+  ]);
   const eu = equipe.find((p) => p.id === usuario?.id);
 
   return (
@@ -67,9 +74,34 @@ export default async function PaginaConfiguracoes() {
                 </li>
               ))}
             </ul>
+            {aguardando.length > 0 && (
+              <div className="border-t border-slate-100">
+                <div className="px-5 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Aguardando liberação
+                </div>
+                <ul>
+                  {aguardando.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm text-slate-900">{p.nome}</div>
+                        <div className="truncate text-xs text-slate-500">{p.email}</div>
+                      </div>
+                      <BotaoAcao
+                        acao={definirPapel.bind(null, p.id, "equipe")}
+                        className={classeBotao("secundario", true)}
+                        aviso={`${p.nome} agora é da equipe`}
+                        pergunta={`Dar a ${p.nome} acesso de equipe a todas as clínicas?`}
+                      >
+                        Adicionar à equipe
+                      </BotaoAcao>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
-              Para incluir alguém, crie o acesso em Authentication → Users no Supabase. A pessoa aparece aqui no
-              primeiro login.
+              Para incluir alguém, crie o usuário em Authentication → Users no Supabase. Depois do primeiro login a
+              pessoa aparece em “Aguardando liberação” e um sócio a adiciona à equipe.
             </p>
           </Cartao>
         </div>

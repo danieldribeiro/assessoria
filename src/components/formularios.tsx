@@ -6,7 +6,10 @@ import { PriorizacaoAoVivo } from "@/components/controles";
 import { AreaTexto, Campo, Entrada, Selecao, classeInput } from "@/components/ui";
 import {
   CATEGORIAS,
+  CORES,
+  NOME_COR,
   PRIORIDADES,
+  TOLERANCIA_PADRAO,
   SEGMENTOS,
   STATUS_ACAO,
   STATUS_ACHADO,
@@ -25,6 +28,8 @@ import {
   type Solicitacao,
 } from "@/lib/dominio";
 import { hoje, somarDiasUteis } from "@/lib/datas";
+
+const decimal = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));
 
 // Responsável do item: em branco, segue o responsável da área no diagnóstico.
 function CampoResponsavel({
@@ -259,9 +264,45 @@ export function CamposIndicador({ indicador, equipe, areas }: { indicador?: Indi
         </Campo>
       </div>
       <CampoResponsavel equipe={equipe} areas={areas} valor={indicador?.responsavel_id} />
-      <Campo rotulo="Referência" dica="Meta, valor de mercado ou período anterior para comparação">
+      <Campo rotulo="Referência" dica="Como aparece no relatório. Ex.: até 10%, 55% a 65%">
         <Entrada name="referencia" defaultValue={indicador?.referencia ?? ""} />
       </Campo>
+      <fieldset className="space-y-3 rounded-lg border border-slate-200 p-3">
+        <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Semáforo da central
+        </legend>
+        <div className="grid grid-cols-3 gap-3">
+          <Campo rotulo="Mínimo">
+            <Entrada name="ref_min" inputMode="decimal" defaultValue={decimal(indicador?.ref_min)} />
+          </Campo>
+          <Campo rotulo="Máximo">
+            <Entrada name="ref_max" inputMode="decimal" defaultValue={decimal(indicador?.ref_max)} />
+          </Campo>
+          <Campo rotulo="Folga (%)">
+            <Entrada
+              name="tolerancia"
+              inputMode="decimal"
+              placeholder={String(TOLERANCIA_PADRAO)}
+              defaultValue={decimal(indicador?.tolerancia)}
+            />
+          </Campo>
+        </div>
+        <p className="text-xs text-slate-500">
+          Dentro da faixa fica verde. Fora dela até a folga, amarelo; além disso, vermelho. Deixe só uma ponta para
+          “até” ou “pelo menos”.
+        </p>
+        <Campo rotulo="Cor fixa" dica="Use quando o número engana. Explique no campo Análise.">
+          <Selecao
+            name="cor_manual"
+            opcoes={CORES.map((c) => ({ valor: c, rotulo: NOME_COR[c] }))}
+            vazio="Calcular pela faixa"
+            defaultValue={indicador?.cor_manual ?? ""}
+          />
+        </Campo>
+        <Campo rotulo="O que significa, para o dono" dica="Uma frase simples que aparece na central.">
+          <AreaTexto name="significado" defaultValue={indicador?.significado ?? ""} rows={2} />
+        </Campo>
+      </fieldset>
       <Campo rotulo="Análise">
         <AreaTexto name="observacao" defaultValue={indicador?.observacao ?? ""} rows={4} />
       </Campo>

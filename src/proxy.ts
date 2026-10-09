@@ -19,6 +19,7 @@ function paginaConfiguracao(faltando: string[]) {
 }
 
 // Renova a sessão do Supabase e manda quem não está logado para /login.
+// /auth/confirmar recebe o link de acesso da central e precisa abrir sem sessão.
 export async function proxy(request: NextRequest) {
   const faltando = variaveisFaltando();
   if (faltando.length) return paginaConfiguracao(faltando);
@@ -49,8 +50,9 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const naLogin = request.nextUrl.pathname.startsWith("/login");
-  if (!user && !naLogin) {
+  const caminho = request.nextUrl.pathname;
+  const naLogin = caminho.startsWith("/login");
+  if (!user && !naLogin && !caminho.startsWith("/auth/")) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
   if (user && naLogin) {

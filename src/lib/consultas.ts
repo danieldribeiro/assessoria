@@ -25,6 +25,18 @@ export async function usuarioAtual() {
   return user;
 }
 
+// Contas que entraram no sistema mas não são da equipe nem foram liberadas para uma clínica.
+// Um sócio decide se a pessoa entra para a equipe.
+export async function contasAguardando() {
+  const supabase = await criarCliente();
+  const [{ data: contas }, { data: acessos }] = await Promise.all([
+    supabase.from("perfis").select("id, nome, email").eq("papel", "cliente").order("nome"),
+    supabase.from("acessos_central").select("email"),
+  ]);
+  const clientes = new Set((acessos ?? []).map((a) => a.email));
+  return ((contas ?? []) as Perfil[]).filter((p) => !clientes.has(p.email.toLowerCase()));
+}
+
 export async function carregarAssessoria() {
   const supabase = await criarCliente();
   const { data } = await supabase.from("assessoria").select("*").maybeSingle();
@@ -33,7 +45,11 @@ export async function carregarAssessoria() {
 
 export async function listarEquipe() {
   const supabase = await criarCliente();
-  const { data } = await supabase.from("perfis").select("id, nome, email, cargo, telefone, foto_url").order("nome");
+  const { data } = await supabase
+    .from("perfis")
+    .select("id, nome, email, cargo, telefone, foto_url")
+    .eq("papel", "equipe")
+    .order("nome");
   return (data ?? []) as Perfil[];
 }
 

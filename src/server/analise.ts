@@ -3,6 +3,7 @@
 import { criarCliente } from "@/lib/supabase/server";
 import {
   CATEGORIAS,
+  CORES,
   PRIORIDADES,
   STATUS_ACHADO,
   STATUS_OPORTUNIDADE,
@@ -38,6 +39,11 @@ export async function salvarIndicador(diagnosticoId: string, id: string | null, 
     unidade: texto(dados, "unidade"),
     periodo: texto(dados, "periodo"),
     referencia: texto(dados, "referencia"),
+    ref_min: numero(dados, "ref_min"),
+    ref_max: numero(dados, "ref_max"),
+    tolerancia: numero(dados, "tolerancia"),
+    significado: texto(dados, "significado"),
+    cor_manual: CORES.find((c) => c === dados.get("cor_manual")) ?? null,
     observacao: texto(dados, "observacao"),
     ...responsavel(dados),
   };
