@@ -19,7 +19,7 @@ $$;
 
 -- E-mail de quem está logado, em minúsculas (vem do login por link, já confirmado).
 create or replace function public.email_atual()
-returns text language sql stable as $$
+returns text language sql stable set search_path = public as $$
   select lower(coalesce(auth.jwt() ->> 'email', ''));
 $$;
 
