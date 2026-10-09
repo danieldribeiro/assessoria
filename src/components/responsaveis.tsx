@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cx } from "@/components/ui";
 import type { Perfil } from "@/lib/dominio";
 
-function iniciaisPessoa(nome: string) {
+export function iniciaisPessoa(nome: string) {
   return nome
     .split(" ")
     .filter(Boolean)
@@ -12,7 +12,7 @@ function iniciaisPessoa(nome: string) {
     .toUpperCase();
 }
 
-// Bolinha com as iniciais de quem cuida do item.
+// Foto de quem cuida do item, ou as iniciais quando não há foto.
 export function AvatarResponsavel({ perfil, className }: { perfil: Perfil | null | undefined; className?: string }) {
   if (!perfil)
     return (
@@ -25,6 +25,16 @@ export function AvatarResponsavel({ perfil, className }: { perfil: Perfil | null
       >
         ?
       </span>
+    );
+  if (perfil.foto_url)
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={perfil.foto_url}
+        alt=""
+        title={perfil.nome}
+        className={cx("inline-block size-6 shrink-0 rounded-full object-cover ring-1 ring-slate-200", className)}
+      />
     );
   return (
     <span

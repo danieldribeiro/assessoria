@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { EtiquetaPrioridade, EtiquetaStatus } from "@/components/etiquetas";
-import { CabecalhoCartao, CabecalhoPagina, Cartao, Etiqueta, Vazio, cx, iniciais } from "@/components/ui";
+import { CabecalhoCartao, CabecalhoPagina, Cartao, Etiqueta, Vazio, cx, LogoEmpresa } from "@/components/ui";
 import { porPrioridade, responsavelDoItem, type Prioridade, type ResponsaveisArea } from "@/lib/dominio";
 import { atrasada, diasUteisAte, formatarData, formatarPeriodo } from "@/lib/datas";
 import { resumoColeta } from "@/lib/consultas";
@@ -27,7 +27,7 @@ type DiagnosticoLinha = {
   periodo_inicio: string;
   periodo_fim: string;
   data_prevista: string | null;
-  empresa: { id: string; nome: string };
+  empresa: { id: string; nome: string; logo_url: string | null };
   responsavel: { nome: string } | null;
   responsaveis_area: ResponsaveisArea | null;
   solicitacoes: { status: string; categoria: string; responsavel_id: string | null }[];
@@ -82,7 +82,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
     supabase
       .from("diagnosticos")
       .select(
-        "id, status, periodo_inicio, periodo_fim, data_prevista, empresa:empresas(id, nome), responsavel:perfis!responsavel_id(nome), responsaveis_area, solicitacoes(status, categoria, responsavel_id), indicadores(valor, categoria, responsavel_id), achados(status, categoria, responsavel_id)",
+        "id, status, periodo_inicio, periodo_fim, data_prevista, empresa:empresas(id, nome, logo_url), responsavel:perfis!responsavel_id(nome), responsaveis_area, solicitacoes(status, categoria, responsavel_id), indicadores(valor, categoria, responsavel_id), achados(status, categoria, responsavel_id)",
       )
       .in("status", emAndamento)
       .order("data_prevista", { ascending: true, nullsFirst: false }),
@@ -329,9 +329,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                       href={`/diagnosticos/${d.id}`}
                       className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-slate-50/70"
                     >
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-600">
-                        {iniciais(d.empresa.nome)}
-                      </span>
+                      <LogoEmpresa nome={d.empresa.nome} logo={d.empresa.logo_url} />
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="truncate text-sm font-medium text-slate-900">{d.empresa.nome}</span>

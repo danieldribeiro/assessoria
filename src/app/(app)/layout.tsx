@@ -18,13 +18,13 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: perfil } = user
-    ? await supabase.from("perfis").select("nome").eq("id", user.id).maybeSingle()
+    ? await supabase.from("perfis").select("nome, foto_url").eq("id", user.id).maybeSingle()
     : { data: null };
 
   const email = user?.email ?? "";
   return (
     <div className="min-h-dvh">
-      <Navegacao saudacao={saudacaoAgora()} usuario={{ nome: perfil?.nome ?? email, email }} sair={sair} />
+      <Navegacao saudacao={saudacaoAgora()} usuario={{ nome: perfil?.nome ?? email, email, foto: perfil?.foto_url ?? null }} sair={sair} />
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">{children}</main>
       <Avisos />
     </div>

@@ -23,7 +23,7 @@ export function Navegacao({
   sair,
 }: {
   saudacao: string;
-  usuario: { nome: string; email: string };
+  usuario: { nome: string; email: string; foto: string | null };
   sair: () => Promise<void>;
 }) {
   const caminho = usePathname();
@@ -73,12 +73,23 @@ export function Navegacao({
 
         <div className="flex items-center justify-end gap-2">
           <BotaoTema className="flex size-9 items-center justify-center rounded-full text-slate-500 hover:bg-superficie hover:text-slate-900 hover:ring-1 hover:ring-slate-200" />
-          <span
-            title={usuario.email}
-            className="hidden size-9 items-center justify-center rounded-full bg-superficie text-xs font-semibold text-slate-600 ring-1 ring-slate-200 sm:flex"
+          <Link
+            href="/configuracoes"
+            title="Perfil e configurações"
+            aria-label="Perfil e configurações"
+            aria-current={caminho.startsWith("/configuracoes") ? "page" : undefined}
+            className={cx(
+              "flex size-9 items-center justify-center overflow-hidden rounded-full bg-superficie text-xs font-semibold text-slate-600 ring-1 ring-slate-200 hover:ring-marca-300",
+              caminho.startsWith("/configuracoes") && "ring-2 ring-marca-500",
+            )}
           >
-            {iniciais}
-          </span>
+            {usuario.foto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={usuario.foto} alt="" className="size-full object-cover" />
+            ) : (
+              iniciais
+            )}
+          </Link>
           <form action={sair}>
             <button
               title="Sair"

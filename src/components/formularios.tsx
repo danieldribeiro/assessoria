@@ -1,5 +1,7 @@
 // Campos dos formulários. O <form> e o botão Salvar vêm do PainelLateral.
 
+import { Building2 } from "lucide-react";
+import { CamposCadastro, SeletorImagem } from "@/components/cadastro";
 import { PriorizacaoAoVivo } from "@/components/controles";
 import { AreaTexto, Campo, Entrada, Selecao, classeInput } from "@/components/ui";
 import {
@@ -58,17 +60,19 @@ type Equipe = { equipe: Perfil[]; areas: ResponsaveisArea };
 export function CamposEmpresa({ empresa }: { empresa?: Empresa }) {
   return (
     <>
-      <Campo rotulo="Nome">
+      <SeletorImagem
+        nome="logo"
+        tipo="logo"
+        valor={empresa?.logo_url}
+        substituto={<Building2 className="size-6 text-slate-400" />}
+      />
+      <Campo rotulo="Nome" dica="Como a clínica é conhecida; aparece nas telas e no relatório.">
         <Entrada name="nome" defaultValue={empresa?.nome} required autoFocus />
       </Campo>
-      <div className="grid grid-cols-2 gap-3">
-        <Campo rotulo="CNPJ">
-          <Entrada name="cnpj" defaultValue={empresa?.cnpj ?? ""} placeholder="00.000.000/0000-00" />
-        </Campo>
-        <Campo rotulo="Segmento">
-          <Selecao name="segmento" opcoes={SEGMENTOS} defaultValue={empresa?.segmento} />
-        </Campo>
-      </div>
+      <Campo rotulo="Segmento">
+        <Selecao name="segmento" opcoes={SEGMENTOS} defaultValue={empresa?.segmento} />
+      </Campo>
+      <CamposCadastro valores={empresa} campoNome="nome" />
       <Campo rotulo="Observações">
         <AreaTexto name="observacoes" defaultValue={empresa?.observacoes ?? ""} rows={4} />
       </Campo>

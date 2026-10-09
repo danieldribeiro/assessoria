@@ -5,6 +5,7 @@ import {
   CATEGORIAS,
   porPrioridade,
   type Acao,
+  type Assessoria,
   type Achado,
   type Diagnostico,
   type Empresa,
@@ -24,16 +25,22 @@ export async function usuarioAtual() {
   return user;
 }
 
+export async function carregarAssessoria() {
+  const supabase = await criarCliente();
+  const { data } = await supabase.from("assessoria").select("*").maybeSingle();
+  return data as Assessoria | null;
+}
+
 export async function listarEquipe() {
   const supabase = await criarCliente();
-  const { data } = await supabase.from("perfis").select("id, nome, email").order("nome");
+  const { data } = await supabase.from("perfis").select("id, nome, email, cargo, telefone, foto_url").order("nome");
   return (data ?? []) as Perfil[];
 }
 
 const ordemCategoria = (c: string) => CATEGORIAS.indexOf(c as (typeof CATEGORIAS)[number]);
 
 export type DiagnosticoCompleto = Diagnostico & {
-  empresa: Pick<Empresa, "id" | "nome" | "segmento" | "cnpj">;
+  empresa: Pick<Empresa, "id" | "nome" | "segmento" | "cnpj" | "logo_url">;
   responsavel: { nome: string } | null;
   solicitacoes: Solicitacao[];
   indicadores: Indicador[];
@@ -49,7 +56,7 @@ export async function carregarDiagnostico(id: string): Promise<DiagnosticoComple
     supabase
     .from("diagnosticos")
     .select(
-      `*, empresa:empresas(id, nome, segmento, cnpj), responsavel:perfis!responsavel_id(nome),
+      `*, empresa:empresas(id, nome, segmento, cnpj, logo_url), responsavel:perfis!responsavel_id(nome),
        solicitacoes(*), indicadores(*), achados(*), oportunidades(*), acoes(*)`,
     )
     .eq("id", id)
