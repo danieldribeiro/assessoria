@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { Avisos } from "@/components/avisos";
 import { Navegacao } from "@/components/navegacao";
 import { criarCliente } from "@/lib/supabase/server";
@@ -18,8 +19,11 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: perfil } = user
-    ? await supabase.from("perfis").select("nome, foto_url").eq("id", user.id).maybeSingle()
+    ? await supabase.from("perfis").select("nome, foto_url, papel").eq("id", user.id).maybeSingle()
     : { data: null };
+
+  // Clientes só usam a central da clínica.
+  if (perfil?.papel === "cliente") redirect("/central");
 
   const email = user?.email ?? "";
   return (

@@ -1,8 +1,10 @@
 import { Plus } from "lucide-react";
 import { BotaoExcluir } from "@/components/controles";
+import { PontoCor } from "@/components/etiquetas";
 import { CamposIndicador } from "@/components/formularios";
 import { PainelLateral } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Vazio, classeBotao, classeTabela as t } from "@/components/ui";
+import { corDoIndicador } from "@/lib/dominio";
 import { formatarValor } from "@/lib/datas";
 import { agruparPorCategoria, filtrarPorResponsavel } from "@/lib/consultas";
 import { excluirIndicador, salvarIndicador } from "@/server/analise";
@@ -90,7 +92,10 @@ export function AbaIndicadores({ d, de, usuarioId }: PropsAba) {
                     </td>
                     <td className={`${t.td} text-right tabular-nums`}>
                       {valor ? (
-                        <span className="font-semibold text-slate-900">{valor}</span>
+                        <span className="inline-flex items-center gap-2 font-semibold text-slate-900">
+                          <PontoCor cor={corDoIndicador(i)} />
+                          {valor}
+                        </span>
                       ) : (
                         <span className="text-slate-400">a preencher</span>
                       )}

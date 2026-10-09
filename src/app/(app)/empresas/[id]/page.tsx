@@ -1,4 +1,4 @@
-import { FileText, Pencil, Plus } from "lucide-react";
+import { Eye, FileText, MonitorSmartphone, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BotaoExcluir } from "@/components/controles";
@@ -8,7 +8,9 @@ import { PainelLateral } from "@/components/painel-lateral";
 import {
   CabecalhoCartao,
   CabecalhoPagina,
+  Campo,
   Cartao,
+  Entrada,
   Etiqueta,
   LogoEmpresa,
   Vazio,
@@ -19,11 +21,15 @@ import { enderecoEmLinhas, type Contato, type Diagnostico, type Empresa } from "
 import { formatarData, formatarPeriodo } from "@/lib/datas";
 import { listarEquipe, ultimasAreas, usuarioAtual } from "@/lib/consultas";
 import { criarCliente } from "@/lib/supabase/server";
+import { liberarAcesso, removerAcesso } from "@/server/central";
 import { criarDiagnostico } from "@/server/diagnosticos";
 import { excluirContato, excluirEmpresa, salvarContato, salvarEmpresa } from "@/server/empresas";
 
+type Acesso = { id: string; email: string; nome: string | null; ultimo_acesso: string | null };
+
 type EmpresaDetalhe = Empresa & {
   contatos: Contato[];
+  acessos_central: Acesso[];
   diagnosticos: (Diagnostico & { responsavel: { nome: string } | null })[];
 };
 
@@ -33,7 +39,9 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
   const [{ data }, equipe, usuario, areasPadrao] = await Promise.all([
     supabase
       .from("empresas")
-      .select("*, contatos(*), diagnosticos(*, responsavel:perfis!responsavel_id(nome))")
+      .select(
+        "*, contatos(*), acessos_central(id, email, nome, ultimo_acesso), diagnosticos(*, responsavel:perfis!responsavel_id(nome))",
+      )
       .eq("id", id)
       .maybeSingle(),
     listarEquipe(),
@@ -93,8 +101,8 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
           rotuloSalvar="Criar diagnóstico"
         >
           <p className="rounded-md bg-marca-50 px-3 py-2 text-sm text-marca-800">
-            O diagnóstico já é criado com a lista padrão de solicitações e de indicadores do segmento{" "}
-            {empresa.segmento}.
+            O diagnóstico já é criado com a lista padrão de solicitações e de indicadores do segmento {empresa.segmento}
+            .
           </p>
           <CamposDiagnostico equipe={equipe} usuarioId={usuario?.id} areasPadrao={areasPadrao} />
         </PainelLateral>
@@ -150,6 +158,7 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
         </div>
 
         <div className="space-y-6 self-start">
+          <CentralDaClinica empresa={empresa} />
           <DadosCadastrais empresa={empresa} />
           <Cartao>
             <CabecalhoCartao titulo="Contatos" contagem={empresa.contatos.length}>
@@ -254,6 +263,81 @@ function DadosCadastrais({ empresa }: { empresa: Empresa }) {
           Falta {faltam.join(", ").replace(/, ([^,]*)$/, " e $1")} para emitir nota. Use “Editar”.
         </p>
       )}
+    </Cartao>
+  );
+}
+
+// Quem entra na central desta clínica. O e-mail liberado recebe um link de acesso no login.
+function CentralDaClinica({ empresa }: { empresa: EmpresaDetalhe }) {
+  const publicados = empresa.diagnosticos.filter((d) => d.publicado_em).length;
+  const sugestoes = empresa.contatos.filter(
+    (c) => c.email && !empresa.acessos_central.some((a) => a.email === c.email!.toLowerCase()),
+  );
+  return (
+    <Cartao>
+      <CabecalhoCartao titulo="Central da clínica" icone={<MonitorSmartphone />}>
+        <PainelLateral
+          titulo="Liberar acesso à central"
+          gatilho={
+            <>
+              <Plus />
+              Liberar
+            </>
+          }
+          classeGatilho={classeBotao("fantasma", true)}
+          acao={liberarAcesso.bind(null, empresa.id)}
+          rotuloSalvar="Liberar acesso"
+          aviso="Acesso liberado"
+        >
+          <p className="rounded-md bg-marca-50 px-3 py-2 text-sm text-marca-800">
+            A pessoa abre o endereço do sistema, toca em “É dono de clínica? Entre com um link por e-mail” e recebe o
+            link neste e-mail. Ela vê só esta clínica e só os diagnósticos publicados.
+          </p>
+          <Campo rotulo="Nome">
+            <Entrada name="nome" defaultValue={sugestoes[0]?.nome ?? ""} />
+          </Campo>
+          <Campo
+            rotulo="E-mail"
+            dica={sugestoes.length ? `Contatos com e-mail: ${sugestoes.map((c) => c.email).join(", ")}` : undefined}
+          >
+            <Entrada name="email" type="email" required defaultValue={sugestoes[0]?.email ?? ""} />
+          </Campo>
+        </PainelLateral>
+      </CabecalhoCartao>
+      {empresa.acessos_central.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-slate-500">Ninguém da clínica tem acesso ainda.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {empresa.acessos_central.map((a) => (
+            <li key={a.id} className="flex items-center justify-between gap-3 px-5 py-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-slate-900">{a.nome ?? a.email}</div>
+                <div className="truncate text-xs text-slate-500">
+                  {a.nome && `${a.email} · `}
+                  {a.ultimo_acesso ? `entrou em ${formatarData(a.ultimo_acesso.slice(0, 10))}` : "ainda não entrou"}
+                </div>
+              </div>
+              <BotaoExcluir
+                acao={removerAcesso.bind(null, a.id)}
+                pergunta={`Tirar o acesso de ${a.email} à central?`}
+                rotulo="Tirar"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+        <span>
+          {publicados} diagnóstico{publicados === 1 ? "" : "s"} publicado{publicados === 1 ? "" : "s"}
+        </span>
+        <Link
+          href={`/central/${empresa.id}`}
+          className="inline-flex items-center gap-1 font-medium text-marca-700 hover:underline"
+        >
+          <Eye className="size-3.5" />
+          Ver como o cliente
+        </Link>
+      </div>
     </Cartao>
   );
 }

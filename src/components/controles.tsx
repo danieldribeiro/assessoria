@@ -116,17 +116,32 @@ export function BotaoAcao({
   acao,
   children,
   className,
+  aviso,
+  pergunta,
 }: {
   acao: () => Promise<unknown>;
   children: React.ReactNode;
   className?: string;
+  aviso?: string;
+  pergunta?: string; // pede confirmação antes
 }) {
   const [pendente, iniciar] = useTransition();
   return (
     <button
       type="button"
       disabled={pendente}
-      onClick={() => iniciar(async () => void (await acao()))}
+      onClick={() => {
+        if (pergunta && !confirm(pergunta)) return;
+        iniciar(async () => {
+          try {
+            await acao();
+            if (aviso) avisar(aviso);
+          } catch (e) {
+            unstable_rethrow(e);
+            avisar("Não foi possível concluir. Tente de novo.", "erro");
+          }
+        });
+      }}
       className={cx(className, pendente && "opacity-50")}
     >
       {children}

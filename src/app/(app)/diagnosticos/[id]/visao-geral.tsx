@@ -1,10 +1,75 @@
+import { Eye, MonitorSmartphone, Send } from "lucide-react";
 import Link from "next/link";
+import { BotaoAcao } from "@/components/controles";
 import { EtiquetaPrioridade, EtiquetaStatus } from "@/components/etiquetas";
 import { PainelLateral } from "@/components/painel-lateral";
-import { AreaTexto, CabecalhoCartao, Campo, Cartao, Vazio, classeBotao, cx } from "@/components/ui";
+import { AreaTexto, CabecalhoCartao, Campo, Cartao, Etiqueta, Vazio, classeBotao, cx } from "@/components/ui";
 import { atrasada, formatarData } from "@/lib/datas";
 import type { DiagnosticoCompleto } from "@/lib/consultas";
+import { despublicarDiagnostico, publicarDiagnostico, salvarRecado } from "@/server/central";
 import { salvarConclusoes } from "@/server/diagnosticos";
+
+// Publicação na central da clínica: o que o dono vê, o recado e o atalho para conferir.
+function CartaoCentral({ d }: { d: DiagnosticoCompleto }) {
+  const publicado = Boolean(d.publicado_em);
+  return (
+    <Cartao className={cx(publicado && "border-emerald-200")}>
+      <CabecalhoCartao titulo="Central da clínica" icone={<MonitorSmartphone />}>
+        {publicado ? <Etiqueta tom="verde">Publicado</Etiqueta> : <Etiqueta tom="cinza">Não publicado</Etiqueta>}
+      </CabecalhoCartao>
+      <div className="space-y-4 px-5 py-4 text-sm">
+        <p className="text-slate-600">
+          {publicado
+            ? `O dono vê este diagnóstico desde ${formatarData(d.publicado_em!.slice(0, 10))}. O que vocês mudarem aparece na hora.`
+            : "O dono da clínica só vê o resumo e o relatório depois que vocês publicarem."}
+        </p>
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recado para o cliente</span>
+            <PainelLateral
+              titulo="Recado para o cliente"
+              gatilho={d.recado ? "Editar" : "Escrever"}
+              classeGatilho="text-xs font-medium text-marca-700 hover:underline"
+              acao={salvarRecado.bind(null, d.id)}
+              aviso="Recado salvo"
+            >
+              <Campo rotulo="Recado" dica="Duas ou três frases que abrem a central. Fale como falaria com o dono.">
+                <AreaTexto name="recado" defaultValue={d.recado ?? ""} rows={6} />
+              </Campo>
+            </PainelLateral>
+          </div>
+          <Texto texto={d.recado} vazio="Sem recado." />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {publicado ? (
+            <BotaoAcao
+              acao={despublicarDiagnostico.bind(null, d.id)}
+              className={classeBotao("secundario", true)}
+              aviso="Diagnóstico retirado da central"
+              pergunta="Tirar este diagnóstico da central? O dono deixa de vê-lo."
+            >
+              Tirar da central
+            </BotaoAcao>
+          ) : (
+            <BotaoAcao
+              acao={publicarDiagnostico.bind(null, d.id)}
+              className={classeBotao("primario", true)}
+              aviso="Publicado na central"
+              pergunta="Publicar este diagnóstico? O dono da clínica passa a ver o resumo e o relatório."
+            >
+              <Send />
+              Publicar na central
+            </BotaoAcao>
+          )}
+          <Link href={`/central/${d.empresa.id}?d=${d.id}`} className={classeBotao("fantasma", true)}>
+            <Eye />
+            Ver como o cliente
+          </Link>
+        </div>
+      </div>
+    </Cartao>
+  );
+}
 
 function Texto({ texto, vazio }: { texto: string | null; vazio: string }) {
   return texto ? (
@@ -69,6 +134,7 @@ export function AbaVisaoGeral({ d }: { d: DiagnosticoCompleto }) {
       </div>
 
       <div className="space-y-6">
+        <CartaoCentral d={d} />
         <Cartao>
           <CabecalhoCartao titulo="Próximas ações">
             <Link href={`/diagnosticos/${d.id}?aba=plano`} className="text-xs text-marca-700 hover:underline">
