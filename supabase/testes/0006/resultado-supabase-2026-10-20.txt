@@ -1,0 +1,23 @@
+Projeto axis-testes (todjkvlpgygmaknczevv), ca-central-1, PostgreSQL 17, plano grátis. 20/10/2026.
+
+Esquema 0001–0005 comparado com a produção (só leitura), por categoria (contagem e hash):
+  colunas 165, restrições 63, políticas 13, funções 12, índices 25, gatilhos 10, RLS 11 tabelas,
+  permissões de tabela 150, permissões de coluna em perfis 32, bucket de imagens 1 -> todas idênticas.
+
+Dados fictícios: seed-supabase.sql (3 pessoas de teste, 2 clínicas, 3 diagnósticos, 66 indicadores).
+
+Conferência (contagem | hash):
+  antes da 0006   indicadores 66 | 3ea67d739197f8c7855404d0055478f8   diagnosticos 3 | 0639e69ab81f38b7e86bb55bc41d4499
+  depois da 0006  indicadores 66 | 3ea67d739197f8c7855404d0055478f8   diagnosticos 3 | 0639e69ab81f38b7e86bb55bc41d4499
+  depois dos testes: igual
+
+Testes (testes-supabase.sql): 50 de 50 passaram.
+  1–37  restrições R0–R5 e R7, inserções e atualizações, versão
+  38–40 equipe (papel authenticated, login real via auth.uid/auth.jwt): central traz os campos novos, mantém os 22 valores, grava situação
+  41–47 cliente com acesso à clínica: vê situação, ressalva, motivo e versão; n/c sem valor; não recebe criado_por/responsavel_id;
+        não vê diagnóstico não publicado; não lê nem grava as tabelas direto
+  48    cliente sem acesso: não vê o diagnóstico publicado
+  49    sem login (anon): não executa central_diagnostico
+  50    registros antigos continuam sem situação nem versão
+
+Avisos do Supabase depois da 0006: só os que já existem em produção (funções security definer da central, índices de FK). Nenhum novo.

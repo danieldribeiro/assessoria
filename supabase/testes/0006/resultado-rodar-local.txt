@@ -1,0 +1,6 @@
+1. Esquema 0001–0005 e dados fictícios carregados
+2. Aplicada a 0006; conferência antes = depois: indicadores|66|be405b34b38af2de479cf8e974ecab7b diagnosticos|3|43e31e35f634cd1df3264409386c1aa2 
+3. Testes (passaram | total):        40 |    40
+4. Testes não deixaram resíduo (conferência igual)
+5. Reversão: esquema e dados idênticos aos de antes da 0006
+6. Reaplicação depois da reversão: ok, dados idênticos
