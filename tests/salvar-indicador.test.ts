@@ -75,4 +75,24 @@ describe("salvarIndicador", () => {
     });
     expect(gravacoes).toHaveLength(0);
   });
+
+  // Regressão: um campo inválido, em qualquer posição, impede a gravação inteira (inserção e edição).
+  const validos = { valor: "47,5", ref_min: "10", ref_max: "40", tolerancia: "20" };
+  const rotulos = { valor: "Valor", ref_min: "Mínimo", ref_max: "Máximo", tolerancia: "Folga" } as const;
+  describe.each(Object.keys(rotulos) as (keyof typeof rotulos)[])("com %s inválido", (campo) => {
+    it.each([
+      ["nova", null],
+      ["edição", "i1"],
+    ])("não grava nada na %s", async (_caso, id) => {
+      const resultado = await salvarIndicador("d1", id, formulario({ ...validos, [campo]: "47.5" }));
+      expect(resultado).toEqual({ erro: expect.stringContaining(`${rotulos[campo]} inválido: “47.5”`) });
+      expect(criarCliente).not.toHaveBeenCalled();
+      expect(gravacoes).toHaveLength(0);
+    });
+  });
+
+  it("com os quatro campos válidos, grava os quatro", async () => {
+    await salvarIndicador("d1", null, formulario(validos));
+    expect(gravacoes[0].registro).toMatchObject({ valor: 47.5, ref_min: 10, ref_max: 40, tolerancia: 20 });
+  });
 });
