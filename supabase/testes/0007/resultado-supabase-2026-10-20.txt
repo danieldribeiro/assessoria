@@ -1,0 +1,5 @@
+Projeto Supabase axis-testes (todjkvlpgygmaknczevv), PostgreSQL 17, dados fictícios.
+20/10/2026: 0007 aplicada pela ferramenta de migração do Supabase; testes.sql rodado em seguida.
+Resultado: {"total":113,"falhas":[],"passaram":113}
+Os dados de apoio e cada caso rodam numa subtransação desfeita no fim: nada ficou gravado.
+Os 7 casos de testes-locais.sql (tentativas de exclusão pela API) rodaram só no Postgres local (120 de 120 com eles).

@@ -1,4 +1,4 @@
-import { Eye, FileText, MonitorSmartphone, Pencil, Plus } from "lucide-react";
+import { Eye, FileText, MonitorSmartphone, Pencil, Plus, Wallet } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BotaoExcluir } from "@/components/controles";
@@ -12,6 +12,7 @@ import {
   Cartao,
   Entrada,
   Etiqueta,
+  LinkBotao,
   LogoEmpresa,
   Vazio,
   classeBotao,
@@ -88,6 +89,10 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
         >
           <CamposEmpresa empresa={empresa} />
         </PainelLateral>
+        <LinkBotao href={`/empresas/${empresa.id}/financeiro`}>
+          <Wallet />
+          Financeiro
+        </LinkBotao>
         <PainelLateral
           titulo="Novo diagnóstico"
           gatilho={
