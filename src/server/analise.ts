@@ -10,7 +10,7 @@ import {
   type Categoria,
   type Prioridade,
 } from "@/lib/dominio";
-import { atualizarTelas, exigir, falha, nota, numero, responsavel, texto } from "@/server/util";
+import { atualizarTelas, exigir, falha, nota, numeros, responsavel, texto } from "@/server/util";
 
 function categoria(dados: FormData): Categoria {
   const c = texto(dados, "categoria");
@@ -31,17 +31,20 @@ export async function salvarIndicador(diagnosticoId: string, id: string | null, 
   const nome = texto(dados, "nome");
   if (!nome) return { erro: "Informe o nome do indicador." };
 
+  const lidos = numeros(dados, { valor: "Valor", ref_min: "Mínimo", ref_max: "Máximo", tolerancia: "Folga" });
+  if ("erro" in lidos) return { erro: lidos.erro };
+
   const registro = {
     diagnostico_id: diagnosticoId,
     categoria: categoria(dados),
     nome,
-    valor: numero(dados, "valor"),
+    valor: lidos.valores.valor,
     unidade: texto(dados, "unidade"),
     periodo: texto(dados, "periodo"),
     referencia: texto(dados, "referencia"),
-    ref_min: numero(dados, "ref_min"),
-    ref_max: numero(dados, "ref_max"),
-    tolerancia: numero(dados, "tolerancia"),
+    ref_min: lidos.valores.ref_min,
+    ref_max: lidos.valores.ref_max,
+    tolerancia: lidos.valores.tolerancia,
     significado: texto(dados, "significado"),
     cor_manual: CORES.find((c) => c === dados.get("cor_manual")) ?? null,
     observacao: texto(dados, "observacao"),

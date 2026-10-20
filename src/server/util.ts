@@ -1,6 +1,7 @@
 import "server-only";
 import { revalidatePath } from "next/cache";
 import { CAMPOS_CADASTRO } from "@/lib/dominio";
+import { lerNumeroBR, mensagemNumeroInvalido } from "@/lib/numeros";
 import type { criarCliente } from "@/lib/supabase/server";
 
 export function texto(dados: FormData, campo: string) {
@@ -10,13 +11,15 @@ export function texto(dados: FormData, campo: string) {
   return limpo === "" ? null : limpo;
 }
 
-export function numero(dados: FormData, campo: string) {
-  const valor = texto(dados, campo);
-  if (valor === null) return null;
-  // Aceita "1.234,56" e "1234.56".
-  const normalizado = valor.includes(",") ? valor.replace(/\./g, "").replace(",", ".") : valor;
-  const n = Number(normalizado);
-  return Number.isFinite(n) ? n : null;
+// Lê campos numéricos no padrão brasileiro. Entrada inválida vira erro, nunca vazio.
+export function numeros<C extends string>(dados: FormData, campos: Record<C, string>) {
+  const valores = {} as Record<C, number | null>;
+  for (const campo of Object.keys(campos) as C[]) {
+    const leitura = lerNumeroBR(texto(dados, campo));
+    if (leitura.estado === "invalido") return { erro: mensagemNumeroInvalido(campos[campo], leitura.texto) };
+    valores[campo] = leitura.estado === "valido" ? leitura.valor : null;
+  }
+  return { valores };
 }
 
 export function nota(dados: FormData, campo: string) {

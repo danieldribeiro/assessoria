@@ -28,8 +28,7 @@ import {
   type Solicitacao,
 } from "@/lib/dominio";
 import { hoje, somarDiasUteis } from "@/lib/datas";
-
-const decimal = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));
+import { FORMATOS_ACEITOS, paraCampoBR } from "@/lib/numeros";
 
 // Responsável do item: em branco, segue o responsável da área no diagnóstico.
 function CampoResponsavel({
@@ -243,11 +242,11 @@ export function CamposIndicador({ indicador, equipe, areas }: { indicador?: Indi
         <Entrada name="nome" defaultValue={indicador?.nome} required />
       </Campo>
       <div className="grid grid-cols-3 gap-3">
-        <Campo rotulo="Valor" className="col-span-2">
+        <Campo rotulo="Valor" className="col-span-2" dica={FORMATOS_ACEITOS}>
           <Entrada
             name="valor"
             inputMode="decimal"
-            defaultValue={indicador?.valor?.toString().replace(".", ",") ?? ""}
+            defaultValue={paraCampoBR(indicador?.valor)}
             autoFocus
           />
         </Campo>
@@ -273,17 +272,17 @@ export function CamposIndicador({ indicador, equipe, areas }: { indicador?: Indi
         </legend>
         <div className="grid grid-cols-3 gap-3">
           <Campo rotulo="Mínimo">
-            <Entrada name="ref_min" inputMode="decimal" defaultValue={decimal(indicador?.ref_min)} />
+            <Entrada name="ref_min" inputMode="decimal" defaultValue={paraCampoBR(indicador?.ref_min)} />
           </Campo>
           <Campo rotulo="Máximo">
-            <Entrada name="ref_max" inputMode="decimal" defaultValue={decimal(indicador?.ref_max)} />
+            <Entrada name="ref_max" inputMode="decimal" defaultValue={paraCampoBR(indicador?.ref_max)} />
           </Campo>
           <Campo rotulo="Folga (%)">
             <Entrada
               name="tolerancia"
               inputMode="decimal"
               placeholder={String(TOLERANCIA_PADRAO)}
-              defaultValue={decimal(indicador?.tolerancia)}
+              defaultValue={paraCampoBR(indicador?.tolerancia)}
             />
           </Campo>
         </div>
