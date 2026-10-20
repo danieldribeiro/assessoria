@@ -2,6 +2,7 @@
 
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
+import { EntradaMoeda } from "@/components/entrada-moeda";
 import { AreaTexto, Campo, Entrada, Selecao } from "@/components/ui";
 import { hoje } from "@/lib/datas";
 import {
@@ -17,9 +18,11 @@ import {
   type ContaPlano,
 } from "@/lib/financeiro/dominio";
 import { emCentavos } from "@/lib/financeiro/rateio";
-import { FORMATOS_ACEITOS, lerNumeroBR, paraCampoBR } from "@/lib/numeros";
+import { lerNumeroBR } from "@/lib/numeros";
 
 type Opcao = { valor: string; rotulo: string };
+
+const DICA_MOEDA = "Digite só os números: os centavos entram sozinhos.";
 
 // Conta do plano. A classificação define a natureza e a seção da DRE (matriz de coerência);
 // o caixa só oferece as opções permitidas para ela.
@@ -129,8 +132,8 @@ export function CamposContaCaixa({ caixa }: { caixa?: ContaCaixa }) {
         <Selecao name="tipo" opcoes={TIPOS_CAIXA} defaultValue={caixa?.tipo ?? "banco"} />
       </Campo>
       <div className="grid grid-cols-2 gap-3">
-        <Campo rotulo="Saldo inicial (R$)" dica={FORMATOS_ACEITOS}>
-          <Entrada name="saldo_inicial" required inputMode="decimal" defaultValue={paraCampoBR(caixa?.saldo_inicial ?? null)} />
+        <Campo rotulo="Saldo inicial" dica={`${DICA_MOEDA} Digite “-” se estava negativo.`}>
+          <EntradaMoeda name="saldo_inicial" required negativo defaultValue={caixa?.saldo_inicial ?? null} />
         </Campo>
         <Campo rotulo="Data do saldo inicial" dica="Saldo no começo deste dia">
           <Entrada name="data_saldo_inicial" type="date" required defaultValue={caixa?.data_saldo_inicial ?? ""} />
@@ -192,8 +195,8 @@ export function CamposLancamento({ caixas, contas }: { caixas: Opcao[]; contas: 
         <Entrada name="descricao" required placeholder="Aluguel de outubro" />
       </Campo>
       <div className="grid grid-cols-2 gap-3">
-        <Campo rotulo="Valor total (R$)" dica={FORMATOS_ACEITOS}>
-          <Entrada name="valor_total" required inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value)} />
+        <Campo rotulo="Valor total" dica={DICA_MOEDA}>
+          <EntradaMoeda name="valor_total" required value={total} onChange={setTotal} />
         </Campo>
         <Campo rotulo="Documento" dica="Nota, boleto, recibo (opcional)">
           <Entrada name="documento" />
@@ -213,14 +216,13 @@ export function CamposLancamento({ caixas, contas }: { caixas: Opcao[]; contas: 
               onChange={(e) => mudar(l.chave, "conta", e.target.value)}
               className="min-w-0 flex-1"
             />
-            <Entrada
+            <EntradaMoeda
               name="rateio_valor"
               aria-label={`Valor da linha ${i + 1}`}
-              inputMode="decimal"
-              placeholder={varias ? "Valor" : "= total"}
+              placeholder={varias ? "0,00" : "= total"}
               value={l.valor}
-              onChange={(e) => mudar(l.chave, "valor", e.target.value)}
-              className="w-28"
+              onChange={(texto) => mudar(l.chave, "valor", texto)}
+              className="w-36"
             />
             {varias && (
               <button
@@ -282,8 +284,8 @@ export function CamposTransferencia({ caixas }: { caixas: Opcao[] }) {
         </Campo>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Campo rotulo="Valor (R$)" dica={FORMATOS_ACEITOS}>
-          <Entrada name="valor" required inputMode="decimal" />
+        <Campo rotulo="Valor" dica={DICA_MOEDA}>
+          <EntradaMoeda name="valor" required />
         </Campo>
         <Campo rotulo="Data">
           <Entrada name="data" type="date" required defaultValue={hoje()} />
