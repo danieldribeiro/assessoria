@@ -1,0 +1,49 @@
+              set_config              
+--------------------------------------
+ 00000000-0000-0000-0000-0000000000a1
+ n  |                                    caso                                    |                    esperado                     |                     obtido                      | resultado 
+----+----------------------------------------------------------------------------+-------------------------------------------------+-------------------------------------------------+-----------
+  1 | sem situação, com valor (registro antigo)                                  | aceito                                          | aceito                                          | OK
+  2 | sem situação, sem valor (a preencher)                                      | aceito                                          | aceito                                          | OK
+  3 | sem situação, valor zero                                                   | aceito                                          | aceito                                          | OK
+  4 | situação fora da lista                                                     | recusado:indicadores_situacao_valida            | recusado:indicadores_situacao_valida            | OK
+  5 | situação com maiúscula (rótulo da planilha)                                | recusado:indicadores_situacao_valida            | recusado:indicadores_situacao_valida            | OK
+  6 | calculado com valor                                                        | aceito                                          | aceito                                          | OK
+  7 | calculado com valor zero                                                   | aceito                                          | aceito                                          | OK
+  8 | calculado com valor negativo                                               | aceito                                          | aceito                                          | OK
+  9 | calculado sem valor (R3)                                                   | recusado:indicadores_situacao_com_valor         | recusado:indicadores_situacao_com_valor         | OK
+ 10 | calculado com ressalva (R5/M3)                                             | recusado:indicadores_calculado_sem_ressalva     | recusado:indicadores_calculado_sem_ressalva     | OK
+ 11 | calculado com motivo (R2)                                                  | recusado:indicadores_motivo_so_nc               | recusado:indicadores_motivo_so_nc               | OK
+ 12 | com ressalvas, valor e ressalva                                            | aceito                                          | aceito                                          | OK
+ 13 | com ressalvas, sem ressalva (R4)                                           | recusado:indicadores_ressalva_obrigatoria       | recusado:indicadores_ressalva_obrigatoria       | OK
+ 14 | com ressalvas, ressalva em branco                                          | recusado:indicadores_ressalva_nao_branca        | recusado:indicadores_ressalva_nao_branca        | OK
+ 15 | com ressalvas, sem valor (R3)                                              | recusado:indicadores_situacao_com_valor         | recusado:indicadores_situacao_com_valor         | OK
+ 16 | estimado com valor, sem ressalva                                           | aceito                                          | aceito                                          | OK
+ 17 | estimado com valor e ressalva                                              | aceito                                          | aceito                                          | OK
+ 18 | estimado sem valor (R3)                                                    | recusado:indicadores_situacao_com_valor         | recusado:indicadores_situacao_com_valor         | OK
+ 19 | confirmar com zero (endividamento sem contratos)                           | aceito                                          | aceito                                          | OK
+ 20 | confirmar sem valor (R3)                                                   | recusado:indicadores_situacao_com_valor         | recusado:indicadores_situacao_com_valor         | OK
+ 21 | n/c sem valor, com motivo                                                  | aceito                                          | aceito                                          | OK
+ 22 | n/c com valor zero (R1)                                                    | recusado:indicadores_nc_sem_valor_com_motivo    | recusado:indicadores_nc_sem_valor_com_motivo    | OK
+ 23 | n/c com valor (R1)                                                         | recusado:indicadores_nc_sem_valor_com_motivo    | recusado:indicadores_nc_sem_valor_com_motivo    | OK
+ 24 | n/c sem motivo (R1)                                                        | recusado:indicadores_nc_sem_valor_com_motivo    | recusado:indicadores_nc_sem_valor_com_motivo    | OK
+ 25 | n/c com motivo em branco                                                   | recusado:indicadores_motivo_nao_branco          | recusado:indicadores_motivo_nao_branco          | OK
+ 26 | n/c com ressalva                                                           | aceito                                          | aceito                                          | OK
+ 27 | ressalva sem situação, com valor (R7)                                      | recusado:indicadores_ressalva_exige_situacao    | recusado:indicadores_ressalva_exige_situacao    | OK
+ 28 | ressalva sem situação, sem valor (R7)                                      | recusado:indicadores_ressalva_exige_situacao    | recusado:indicadores_ressalva_exige_situacao    | OK
+ 29 | confirmar com ressalva                                                     | aceito                                          | aceito                                          | OK
+ 30 | update: situação apagada mantendo a ressalva (R7)                          | recusado:indicadores_ressalva_exige_situacao    | recusado:indicadores_ressalva_exige_situacao    | OK
+ 31 | motivo sem situação (R2)                                                   | recusado:indicadores_motivo_so_nc               | recusado:indicadores_motivo_so_nc               | OK
+ 32 | update: antigo passa a n/c mantendo valor                                  | recusado:indicadores_nc_sem_valor_com_motivo    | recusado:indicadores_nc_sem_valor_com_motivo    | OK
+ 33 | update: registro antigo vira calculado e perde o valor                     | recusado:indicadores_situacao_com_valor         | recusado:indicadores_situacao_com_valor         | OK
+ 34 | update: registro antigo recebe ressalva sem situação (R7)                  | recusado:indicadores_ressalva_exige_situacao    | recusado:indicadores_ressalva_exige_situacao    | OK
+ 35 | versão v4                                                                  | aceito                                          | aceito                                          | OK
+ 36 | versão fora da lista                                                       | recusado:diagnosticos_versao_metodologia_valida | recusado:diagnosticos_versao_metodologia_valida | OK
+ 37 | versão vazia                                                               | aceito                                          | aceito                                          | OK
+ 38 | central_diagnostico (função real) inclui situacao/motivo/ressalva e versao | sim                                             | sim                                             | OK
+ 39 | central_diagnostico mantém os 22 valores                                   | 22                                              | 22                                              | OK
+ 40 | registros antigos sem situação nem versão                                  | 0                                               | 0                                               | OK
+(40 rows)
+ passaram | total 
+----------+-------
+       40 |    40
