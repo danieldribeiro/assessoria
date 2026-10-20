@@ -4,6 +4,7 @@ import { Building2 } from "lucide-react";
 import { CamposCadastro, SeletorImagem } from "@/components/cadastro";
 import { PriorizacaoAoVivo } from "@/components/controles";
 import { AreaTexto, Campo, Entrada, Selecao, classeInput } from "@/components/ui";
+import { CampoNumeroIndicador, SeletorUnidade, UnidadeIndicador } from "@/components/valor-indicador";
 import {
   CATEGORIAS,
   CORES,
@@ -15,7 +16,6 @@ import {
   STATUS_ACHADO,
   STATUS_OPORTUNIDADE,
   STATUS_SOLICITACAO,
-  UNIDADES,
   type Acao,
   type Achado,
   type Contato,
@@ -28,7 +28,7 @@ import {
   type Solicitacao,
 } from "@/lib/dominio";
 import { hoje, somarDiasUteis } from "@/lib/datas";
-import { FORMATOS_ACEITOS, paraCampoBR } from "@/lib/numeros";
+import { paraCampoBR } from "@/lib/numeros";
 
 // Responsável do item: em branco, segue o responsável da área no diagnóstico.
 function CampoResponsavel({
@@ -237,21 +237,14 @@ export function CamposSolicitacao({ solicitacao, equipe, areas }: { solicitacao?
 
 export function CamposIndicador({ indicador, equipe, areas }: { indicador?: Indicador } & Equipe) {
   return (
-    <>
+    <UnidadeIndicador inicial={indicador?.unidade ?? ""}>
       <Campo rotulo="Indicador">
         <Entrada name="nome" defaultValue={indicador?.nome} required />
       </Campo>
       <div className="grid grid-cols-3 gap-3">
-        <Campo rotulo="Valor" className="col-span-2" dica={FORMATOS_ACEITOS}>
-          <Entrada
-            name="valor"
-            inputMode="decimal"
-            defaultValue={paraCampoBR(indicador?.valor)}
-            autoFocus
-          />
-        </Campo>
+        <CampoNumeroIndicador rotulo="Valor" name="valor" valor={indicador?.valor} dica className="col-span-2" autoFocus />
         <Campo rotulo="Unidade">
-          <Selecao name="unidade" opcoes={UNIDADES} vazio="—" defaultValue={indicador?.unidade ?? ""} />
+          <SeletorUnidade />
         </Campo>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -271,12 +264,8 @@ export function CamposIndicador({ indicador, equipe, areas }: { indicador?: Indi
           Semáforo da central
         </legend>
         <div className="grid grid-cols-3 gap-3">
-          <Campo rotulo="Mínimo">
-            <Entrada name="ref_min" inputMode="decimal" defaultValue={paraCampoBR(indicador?.ref_min)} />
-          </Campo>
-          <Campo rotulo="Máximo">
-            <Entrada name="ref_max" inputMode="decimal" defaultValue={paraCampoBR(indicador?.ref_max)} />
-          </Campo>
+          <CampoNumeroIndicador rotulo="Mínimo" name="ref_min" valor={indicador?.ref_min} />
+          <CampoNumeroIndicador rotulo="Máximo" name="ref_max" valor={indicador?.ref_max} />
           <Campo rotulo="Folga (%)">
             <Entrada
               name="tolerancia"
@@ -305,7 +294,7 @@ export function CamposIndicador({ indicador, equipe, areas }: { indicador?: Indi
       <Campo rotulo="Análise">
         <AreaTexto name="observacao" defaultValue={indicador?.observacao ?? ""} rows={4} />
       </Campo>
-    </>
+    </UnidadeIndicador>
   );
 }
 
