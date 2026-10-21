@@ -16,8 +16,10 @@ import {
   nomeSecaoDre,
   type ContaCaixa,
   type ContaPlano,
+  type Lancamento,
 } from "@/lib/financeiro/dominio";
 import { emCentavos } from "@/lib/financeiro/rateio";
+import { moedaParaCampo } from "@/lib/moeda";
 import { lerNumeroBR } from "@/lib/numeros";
 
 type Opcao = { valor: string; rotulo: string };
@@ -152,10 +154,15 @@ export function CamposContaCaixa({ caixa }: { caixa?: ContaCaixa }) {
 type Linha = { chave: number; conta: string; valor: string };
 
 // Lançamento com rateio: cada linha é uma conta do plano; a soma precisa bater com o valor total.
-export function CamposLancamento({ caixas, contas }: { caixas: Opcao[]; contas: Opcao[] }) {
-  const [situacao, setSituacao] = useState("realizado");
-  const [total, setTotal] = useState("");
-  const [linhas, setLinhas] = useState<Linha[]>([{ chave: 0, conta: "", valor: "" }]);
+// Com `lancamento`, o formulário vem preenchido para a edição.
+export function CamposLancamento({ caixas, contas, lancamento: l0 }: { caixas: Opcao[]; contas: Opcao[]; lancamento?: Lancamento }) {
+  const [situacao, setSituacao] = useState<string>(l0?.situacao === "previsto" ? "previsto" : "realizado");
+  const [total, setTotal] = useState(() => moedaParaCampo(l0?.valor_total));
+  const [linhas, setLinhas] = useState<Linha[]>(() =>
+    l0?.rateios.length
+      ? l0.rateios.map((r, i) => ({ chave: i, conta: r.conta_id, valor: moedaParaCampo(r.valor) }))
+      : [{ chave: 0, conta: "", valor: "" }],
+  );
   const totalC = centavosDe(total);
   const somaC = linhas.reduce((a, l) => a + (centavosDe(l.valor) ?? 0), 0);
   const varias = linhas.length > 1;
@@ -169,7 +176,11 @@ export function CamposLancamento({ caixas, contas }: { caixas: Opcao[]; contas: 
     <>
       <div className="grid grid-cols-2 gap-3">
         <Campo rotulo="Tipo">
-          <Selecao name="direcao" opcoes={[{ valor: "saida", rotulo: "Saída (pagamento)" }, { valor: "entrada", rotulo: "Entrada (recebimento)" }]} />
+          <Selecao
+            name="direcao"
+            defaultValue={l0?.direcao}
+            opcoes={[{ valor: "saida", rotulo: "Saída (pagamento)" }, { valor: "entrada", rotulo: "Entrada (recebimento)" }]}
+          />
         </Campo>
         <Campo rotulo="Situação">
           <Selecao
@@ -181,25 +192,30 @@ export function CamposLancamento({ caixas, contas }: { caixas: Opcao[]; contas: 
         </Campo>
       </div>
       <Campo rotulo="Conta de caixa">
-        <Selecao name="conta_caixa_id" required vazio="Escolha…" opcoes={caixas} />
+        <Selecao name="conta_caixa_id" required vazio="Escolha…" opcoes={caixas} defaultValue={l0?.conta_caixa_id} />
       </Campo>
       <div className="grid grid-cols-2 gap-3">
         <Campo rotulo={situacao === "realizado" ? "Data do pagamento ou recebimento" : "Vencimento"}>
-          <Entrada name="data" type="date" required defaultValue={hoje()} />
+          <Entrada
+            name="data"
+            type="date"
+            required
+            defaultValue={(l0?.situacao === "previsto" ? l0.data_vencimento : l0?.data_liquidacao) ?? hoje()}
+          />
         </Campo>
         <Campo rotulo="Competência" dica="Dia ou mês a que se refere. Vazio = mesma data">
-          <Entrada name="data_competencia" type="date" />
+          <Entrada name="data_competencia" type="date" defaultValue={l0?.data_competencia} />
         </Campo>
       </div>
       <Campo rotulo="Descrição">
-        <Entrada name="descricao" required placeholder="Aluguel de outubro" />
+        <Entrada name="descricao" required placeholder="Aluguel de outubro" defaultValue={l0?.descricao} />
       </Campo>
       <div className="grid grid-cols-2 gap-3">
         <Campo rotulo="Valor total" dica={DICA_MOEDA}>
           <EntradaMoeda name="valor_total" required value={total} onChange={setTotal} />
         </Campo>
         <Campo rotulo="Documento" dica="Nota, boleto, recibo (opcional)">
-          <Entrada name="documento" />
+          <Entrada name="documento" defaultValue={l0?.documento ?? ""} />
         </Campo>
       </div>
 
@@ -256,7 +272,7 @@ export function CamposLancamento({ caixas, contas }: { caixas: Opcao[]; contas: 
         </p>
       </fieldset>
       <label className="flex items-start gap-2 text-sm text-slate-700">
-        <input type="checkbox" name="juros_nao_segregados" className="mt-1" />
+        <input type="checkbox" name="juros_nao_segregados" className="mt-1" defaultChecked={l0?.juros_nao_segregados} />
         <span>
           Juros não segregados
           <span className="block text-xs text-slate-500">

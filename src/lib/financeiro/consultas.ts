@@ -47,6 +47,7 @@ export async function carregarLancamentos(empresaId: string, inicio: string, fim
     .from("fin_lancamentos")
     .select("*, rateios:fin_lancamento_rateios(conta_id, valor)")
     .eq("empresa_id", empresaId)
+    .is("rateios.substituido_em", null)
     .or(
       `and(data_liquidacao.gte.${inicio},data_liquidacao.lte.${fim}),and(data_liquidacao.is.null,data_vencimento.gte.${inicio},data_vencimento.lte.${fim})`,
     )

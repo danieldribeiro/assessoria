@@ -30,7 +30,7 @@ function emArvore(contas: ContaPlano[]) {
 
 export async function AbaPlanoContas({ empresa, contas }: { empresa: { id: string }; contas: ContaPlano[] }) {
   const supabase = await criarCliente();
-  const { data: usos } = await supabase.from("fin_lancamento_rateios").select("conta_id").eq("empresa_id", empresa.id);
+  const { data: usos } = await supabase.from("fin_lancamento_rateios").select("conta_id").eq("empresa_id", empresa.id).is("substituido_em", null);
   const usadas = new Set((usos ?? []).map((u) => u.conta_id as string));
   const arvore = emArvore(contas);
   const grupos = arvore

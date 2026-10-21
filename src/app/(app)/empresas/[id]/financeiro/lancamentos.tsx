@@ -1,12 +1,12 @@
-import { ArrowLeftRight, CircleCheck, Plus, ReceiptText } from "lucide-react";
+import { ArrowLeftRight, CircleCheck, Pencil, Plus, ReceiptText } from "lucide-react";
 import { BotaoAcao } from "@/components/controles";
 import { PainelLateral } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t, type Tom } from "@/components/ui";
 import { formatarData, formatarPeriodo, formatarValor } from "@/lib/datas";
 import { carregarLancamentos, carregarTransferencias } from "@/lib/financeiro/consultas";
-import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type SituacaoLancamento } from "@/lib/financeiro/dominio";
+import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Lancamento, type SituacaoLancamento } from "@/lib/financeiro/dominio";
 import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
-import { cancelarLancamento, cancelarTransferencia, lancar, liquidarLancamento, transferir } from "@/server/financeiro";
+import { cancelarLancamento, cancelarTransferencia, editarLancamento, lancar, liquidarLancamento, transferir } from "@/server/financeiro";
 import { CamposLancamento, CamposLiquidacao, CamposTransferencia } from "./campos";
 import { FiltroPeriodo, classeFiltro } from "./filtro";
 
@@ -47,6 +47,16 @@ export async function AbaLancamentos({
     .sort((a, b) => compararCodigo(a.codigo, b.codigo))
     .map((c) => ({ valor: c.id, rotulo: `${c.codigo} · ${c.nome}` }));
   const podeLancar = opcoesCaixa.length > 0 && opcoesConta.length > 0;
+  // Na edição, a conta de caixa e as contas do rateio atuais continuam na lista mesmo se foram desativadas.
+  const opcoesEdicao = (l: Lancamento) => ({
+    caixas: caixas
+      .filter((c) => c.ativa || c.id === l.conta_caixa_id)
+      .map((c) => ({ valor: c.id, rotulo: c.ativa ? c.nome : `${c.nome} (inativa)` })),
+    contas: contas
+      .filter((c) => recebeLancamento(c) || l.rateios.some((r) => r.conta_id === c.id))
+      .sort((a, b) => compararCodigo(a.codigo, b.codigo))
+      .map((c) => ({ valor: c.id, rotulo: `${c.codigo} · ${c.nome}${c.ativa ? "" : " (inativa)"}` })),
+  });
 
   return (
     <div className="space-y-6">
@@ -172,6 +182,26 @@ export async function AbaLancamentos({
                       {moeda(sinal * l.valor_total)}
                     </td>
                     <td className={`${t.td} whitespace-nowrap text-right`}>
+                      {l.situacao !== "cancelado" && (
+                        <PainelLateral
+                          titulo="Editar lançamento"
+                          gatilho={
+                            <>
+                              <Pencil />
+                              Editar
+                            </>
+                          }
+                          classeGatilho={classeBotao("fantasma", true)}
+                          acao={editarLancamento.bind(null, l.id)}
+                          rotuloSalvar="Salvar alterações"
+                          aviso="Lançamento alterado"
+                        >
+                          <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                            Toda alteração fica registrada, com o valor de antes e o de depois.
+                          </p>
+                          <CamposLancamento {...opcoesEdicao(l)} lancamento={l} />
+                        </PainelLateral>
+                      )}
                       {l.situacao === "previsto" && (
                         <PainelLateral
                           titulo={`Marcar como realizado: ${l.descricao}`}
