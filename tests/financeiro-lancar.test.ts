@@ -13,7 +13,7 @@ vi.mock("@/lib/supabase/server", () => ({ criarCliente }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.spyOn(console, "error").mockImplementation(() => {});
 
-const { lancar } = await import("@/server/financeiro");
+const { editarLancamento, lancar } = await import("@/server/financeiro");
 
 function formulario(campos: Record<string, string>, rateio: [string, string][] = [["c1", ""]]) {
   const dados = new FormData();
@@ -85,5 +85,40 @@ describe("lancar", () => {
   it("repassa a mensagem própria do banco", async () => {
     erroDoBanco = { message: "A data do pagamento é anterior ao saldo inicial da conta de caixa." };
     expect(await lancar("e1", formulario({}))).toEqual({ erro: erroDoBanco.message });
+  });
+});
+
+describe("editarLancamento", () => {
+  it("chama a edição com o id e os mesmos parâmetros do lançamento novo", async () => {
+    const dados = formulario({ situacao: "previsto", valor_total: "1.000,00" }, [["c1", "800,00"], ["c2", "200,00"]]);
+    expect(await editarLancamento("l1", dados)).toBeUndefined();
+    expect(chamadas).toEqual([
+      {
+        funcao: "fin_editar_lancamento",
+        parametros: expect.objectContaining({
+          p_id: "l1",
+          p_valor_total: 1000,
+          p_situacao: "previsto",
+          p_vencimento: "2026-10-05",
+          p_liquidacao: null,
+          p_rateios: [
+            { conta_id: "c1", valor: 800 },
+            { conta_id: "c2", valor: 200 },
+          ],
+        }),
+      },
+    ]);
+    expect(chamadas[0].parametros).not.toHaveProperty("p_empresa");
+  });
+
+  it("recusa rateio que não fecha sem chamar o banco", async () => {
+    const r = await editarLancamento("l1", formulario({ valor_total: "100" }, [["c1", "60"], ["c2", "30"]]));
+    expect(r).toEqual({ erro: expect.stringContaining("A soma precisa ser exata") });
+    expect(criarCliente).not.toHaveBeenCalled();
+  });
+
+  it("repassa a recusa do banco, como lançamento cancelado", async () => {
+    erroDoBanco = { message: "Lançamento cancelado não muda." };
+    expect(await editarLancamento("l1", formulario({}))).toEqual({ erro: "Lançamento cancelado não muda." });
   });
 });

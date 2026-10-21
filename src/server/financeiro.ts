@@ -123,7 +123,8 @@ export async function mudarAtivacaoCaixa(id: string, ativa: boolean) {
 // Lançamentos
 // ---------------------------------------------------------------------------
 
-export async function lancar(empresaId: string, dados: FormData) {
+// Lê o formulário de lançamento (novo ou edição) e devolve os parâmetros das funções do banco.
+function lerLancamento(dados: FormData) {
   const direcao = texto(dados, "direcao");
   const situacao = texto(dados, "situacao");
   const contaCaixa = texto(dados, "conta_caixa_id");
@@ -146,21 +147,38 @@ export async function lancar(empresaId: string, dados: FormData) {
   const rateio = lerRateio(dados, totalCentavos);
   if ("erro" in rateio) return { erro: rateio.erro };
 
+  return {
+    parametros: {
+      p_direcao: direcao,
+      p_valor_total: totalCentavos / 100,
+      p_conta_caixa: contaCaixa,
+      p_situacao: situacao,
+      p_competencia: data(dados, "data_competencia") ?? dataMovimento,
+      p_vencimento: situacao === "previsto" ? dataMovimento : null,
+      p_liquidacao: situacao === "realizado" ? dataMovimento : null,
+      p_descricao: descricao,
+      p_documento: texto(dados, "documento"),
+      p_juros_nao_segregados: marcado(dados, "juros_nao_segregados"),
+      p_rateios: rateio.linhas,
+    },
+  };
+}
+
+export async function lancar(empresaId: string, dados: FormData) {
+  const lido = lerLancamento(dados);
+  if ("erro" in lido) return { erro: lido.erro };
   const supabase = await criarCliente();
-  const { error } = await supabase.rpc("fin_lancar", {
-    p_empresa: empresaId,
-    p_direcao: direcao,
-    p_valor_total: totalCentavos / 100,
-    p_conta_caixa: contaCaixa,
-    p_situacao: situacao,
-    p_competencia: data(dados, "data_competencia") ?? dataMovimento,
-    p_vencimento: situacao === "previsto" ? dataMovimento : null,
-    p_liquidacao: situacao === "realizado" ? dataMovimento : null,
-    p_descricao: descricao,
-    p_documento: texto(dados, "documento"),
-    p_juros_nao_segregados: marcado(dados, "juros_nao_segregados"),
-    p_rateios: rateio.linhas,
-  });
+  const { error } = await supabase.rpc("fin_lancar", { p_empresa: empresaId, ...lido.parametros });
+  if (error) return falhaFinanceira(error);
+  atualizarTelas();
+}
+
+// Edição completa (migração 0008): corrige qualquer campo e o rateio; o banco guarda o antes e o depois.
+export async function editarLancamento(id: string, dados: FormData) {
+  const lido = lerLancamento(dados);
+  if ("erro" in lido) return { erro: lido.erro };
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_editar_lancamento", { p_id: id, ...lido.parametros });
   if (error) return falhaFinanceira(error);
   atualizarTelas();
 }
