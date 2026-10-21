@@ -11,7 +11,15 @@ export type Filtros = {
   conta?: string | null; // conta do plano (grupo ou analítica); grupo vale pelas contas abaixo dele
   tipo?: Direcao | null;
   secoes?: number[] | null; // seções da DRE
+  contraparte?: string | null; // fornecedor ou cliente; SEM_CONTRAPARTE = lançamentos sem nenhum
 };
+
+export const SEM_CONTRAPARTE = "sem";
+
+function passaContraparte(l: Lancamento, filtro: string | null | undefined) {
+  if (!filtro) return true;
+  return filtro === SEM_CONTRAPARTE ? !l.contraparte_id : l.contraparte_id === filtro;
+}
 
 export type Parcela = {
   lancamento: Lancamento;
@@ -66,6 +74,7 @@ export function parcelas(
     if (!data || data < inicio || data > fim) continue;
     if (filtros.caixa && l.conta_caixa_id !== filtros.caixa) continue;
     if (filtros.tipo && l.direcao !== filtros.tipo) continue;
+    if (!passaContraparte(l, filtros.contraparte)) continue;
     const sinal = l.direcao === "entrada" ? 1 : -1;
     for (const r of l.rateios) {
       const conta = porId.get(r.conta_id);
@@ -205,6 +214,27 @@ export function despesasPorConta(lista: Parcela[], maximo = 7): FatiaDespesa[] {
   return primeiras;
 }
 
+// Despesas (linhas 2, 3, 5, 6 e 8) por fornecedor, do maior para o menor. Lançamentos sem fornecedor ficam juntos
+// numa linha própria, sempre mostrada, para o total bater.
+export function despesasPorContraparte(lista: Parcela[], nomes: Map<string, string>, maximo = 8): FatiaDespesa[] {
+  const por = new Map<string, number>();
+  for (const p of lista) {
+    if (!(SECOES_DESPESA as readonly number[]).includes(p.conta.dre_secao ?? 0)) continue;
+    const chave = p.lancamento.contraparte_id ?? SEM_CONTRAPARTE;
+    por.set(chave, (por.get(chave) ?? 0) - p.centavos);
+  }
+  const sem = por.get(SEM_CONTRAPARTE) ?? 0;
+  por.delete(SEM_CONTRAPARTE);
+  const ordenadas = [...por.entries()].filter(([, c]) => c !== 0).sort((a, b) => b[1] - a[1]);
+  const total = somar(ordenadas.map(([, c]) => c)) + sem;
+  const fatia = (id: string | null, nome: string, c: number) => ({ id, nome, valor: reais(c), participacao: total ? c / total : 0 });
+  const saida = ordenadas.slice(0, maximo).map(([id, c]) => fatia(id, nomes.get(id) ?? "Fornecedor", c));
+  const resto = ordenadas.slice(maximo);
+  if (resto.length) saida.push(fatia(null, `Outros ${resto.length} fornecedores`, somar(resto.map(([, c]) => c))));
+  if (sem !== 0) saida.push(fatia(SEM_CONTRAPARTE, "Sem fornecedor informado", sem));
+  return saida;
+}
+
 export type MaiorDespesa = { lancamento: Lancamento; valor: number };
 
 // Os lançamentos com a maior parte em despesa (só a parte do rateio que é despesa).
@@ -256,6 +286,7 @@ export function filtrarLancamentos(
   for (const l of lancamentos) {
     if (filtros.caixa && l.conta_caixa_id !== filtros.caixa) continue;
     if (filtros.tipo && l.direcao !== filtros.tipo) continue;
+    if (!passaContraparte(l, filtros.contraparte)) continue;
     const partes = l.rateios.filter((r) => {
       const c = porId.get(r.conta_id);
       if (selecao && !(c && selecao.has(c.id))) return false;

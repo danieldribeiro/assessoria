@@ -14,8 +14,11 @@ import {
   TIPOS_CONTA,
   ehClassificacao,
   nomeSecaoDre,
+  TIPOS_CONTRAPARTE,
+  formatarDocumento,
   type ContaCaixa,
   type ContaPlano,
+  type Contraparte,
   type Lancamento,
 } from "@/lib/financeiro/dominio";
 import { emCentavos } from "@/lib/financeiro/rateio";
@@ -153,11 +156,28 @@ export function CamposContaCaixa({ caixa }: { caixa?: ContaCaixa }) {
 
 type Linha = { chave: number; conta: string; valor: string };
 
+// Movimentação do extrato que vira lançamento: valor, sentido, conta de caixa e data vêm do banco e não mudam.
+export type MovimentoFixo = { direcao: "entrada" | "saida"; valor: number; data: string; descricao: string; documento: string | null };
+
 // Lançamento com rateio: cada linha é uma conta do plano; a soma precisa bater com o valor total.
-// Com `lancamento`, o formulário vem preenchido para a edição.
-export function CamposLancamento({ caixas, contas, lancamento: l0 }: { caixas: Opcao[]; contas: Opcao[]; lancamento?: Lancamento }) {
+// Com `lancamento`, o formulário vem preenchido para a edição. Com `contrapartes` (lista, mesmo vazia), mostra os
+// campos de fornecedor ou cliente e observações (migration 0009); sem a lista, eles ficam de fora.
+// Com `fixo`, é o lançamento criado a partir de uma movimentação do extrato.
+export function CamposLancamento({
+  caixas,
+  contas,
+  lancamento: l0,
+  contrapartes,
+  fixo,
+}: {
+  caixas: Opcao[];
+  contas: Opcao[];
+  lancamento?: Lancamento;
+  contrapartes?: Opcao[] | null;
+  fixo?: MovimentoFixo;
+}) {
   const [situacao, setSituacao] = useState<string>(l0?.situacao === "previsto" ? "previsto" : "realizado");
-  const [total, setTotal] = useState(() => moedaParaCampo(l0?.valor_total));
+  const [total, setTotal] = useState(() => moedaParaCampo(fixo ? fixo.valor : l0?.valor_total));
   const [linhas, setLinhas] = useState<Linha[]>(() =>
     l0?.rateios.length
       ? l0.rateios.map((r, i) => ({ chave: i, conta: r.conta_id, valor: moedaParaCampo(r.valor) }))
@@ -170,6 +190,114 @@ export function CamposLancamento({ caixas, contas, lancamento: l0 }: { caixas: O
 
   function mudar(chave: number, campo: "conta" | "valor", valor: string) {
     setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, [campo]: valor } : l)));
+  }
+
+  const fornecedor = contrapartes ? (
+    <Campo rotulo="Fornecedor ou cliente" dica="Opcional. Despesas de fornecedores diferentes ficam em lançamentos separados.">
+      <Selecao name="contraparte_id" vazio="(nenhum)" opcoes={contrapartes} defaultValue={l0?.contraparte_id ?? ""} />
+    </Campo>
+  ) : null;
+  const observacoes = contrapartes ? (
+    <Campo rotulo="Observações">
+      <AreaTexto name="observacoes" rows={2} defaultValue={l0?.observacoes ?? ""} />
+    </Campo>
+  ) : null;
+
+  const rateio = (
+    <fieldset className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <legend className="px-1 text-sm font-medium text-slate-700">Contas do plano (rateio)</legend>
+      {linhas.map((l, i) => (
+        <div key={l.chave} className="flex items-start gap-2">
+          <Selecao
+            name="rateio_conta"
+            aria-label={`Conta da linha ${i + 1}`}
+            vazio="Escolha a conta…"
+            opcoes={contas}
+            value={l.conta}
+            onChange={(e) => mudar(l.chave, "conta", e.target.value)}
+            className="min-w-0 flex-1"
+          />
+          <EntradaMoeda
+            name="rateio_valor"
+            aria-label={`Valor da linha ${i + 1}`}
+            placeholder={varias ? "0,00" : "= total"}
+            value={l.valor}
+            onChange={(texto) => mudar(l.chave, "valor", texto)}
+            className="w-36"
+          />
+          {varias && (
+            <button
+              type="button"
+              onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))}
+              className="mt-1.5 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+              aria-label={`Tirar a linha ${i + 1}`}
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setLinhas((ls) => [...ls, { chave: Math.max(...ls.map((x) => x.chave)) + 1, conta: "", valor: "" }])}
+          className="inline-flex items-center gap-1 text-xs font-medium text-marca-700 hover:underline"
+        >
+          <Plus className="size-3.5" />
+          Dividir em mais uma conta
+        </button>
+        {falta !== null && (
+          <span className={falta === 0 ? "text-xs text-emerald-700" : "text-xs text-amber-700"}>
+            {falta === 0 ? "Soma confere" : `${falta > 0 ? "Faltam" : "Sobram"} ${formatar(Math.abs(falta))}`}
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-slate-500">
+        Ex.: parcela de empréstimo = amortização + juros. Com uma conta só, o valor da linha é o total.
+      </p>
+    </fieldset>
+  );
+
+  const juros = (
+    <label className="flex items-start gap-2 text-sm text-slate-700">
+      <input type="checkbox" name="juros_nao_segregados" className="mt-1" defaultChecked={l0?.juros_nao_segregados} />
+      <span>
+        Juros não segregados
+        <span className="block text-xs text-slate-500">
+          Parcela de dívida sem a separação entre principal e juros. O Axis não estima os juros.
+        </span>
+      </span>
+    </label>
+  );
+
+  if (fixo) {
+    return (
+      <>
+        <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <p className="font-medium text-slate-900">{fixo.descricao}</p>
+          <p className="text-xs text-slate-500">
+            {fixo.direcao === "entrada" ? "Entrada" : "Saída"} de {formatar(Math.round(fixo.valor * 100))} em{" "}
+            {fixo.data.split("-").reverse().join("/")}, como veio do banco. Valor, sentido, conta de caixa e data não mudam.
+          </p>
+        </div>
+        <input type="hidden" name="valor_total" value={total} />
+        <Campo rotulo="Descrição">
+          <Entrada name="descricao" required defaultValue={fixo.descricao} />
+        </Campo>
+        <div className="grid grid-cols-2 gap-3">
+          <Campo rotulo="Competência" dica="Dia ou mês a que se refere. Vazio = data do banco">
+            <Entrada name="data_competencia" type="date" />
+          </Campo>
+          <Campo rotulo="Documento" dica="Nota, boleto, recibo (opcional)">
+            <Entrada name="documento" defaultValue={fixo.documento ?? ""} />
+          </Campo>
+        </div>
+        {fornecedor}
+        {rateio}
+        {observacoes}
+        {juros}
+      </>
+    );
   }
 
   return (
@@ -218,68 +346,27 @@ export function CamposLancamento({ caixas, contas, lancamento: l0 }: { caixas: O
           <Entrada name="documento" defaultValue={l0?.documento ?? ""} />
         </Campo>
       </div>
+      {fornecedor}
+      {rateio}
+      {observacoes}
+      {juros}
+    </>
+  );
+}
 
-      <fieldset className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <legend className="px-1 text-sm font-medium text-slate-700">Contas do plano (rateio)</legend>
-        {linhas.map((l, i) => (
-          <div key={l.chave} className="flex items-start gap-2">
-            <Selecao
-              name="rateio_conta"
-              aria-label={`Conta da linha ${i + 1}`}
-              vazio="Escolha a conta…"
-              opcoes={contas}
-              value={l.conta}
-              onChange={(e) => mudar(l.chave, "conta", e.target.value)}
-              className="min-w-0 flex-1"
-            />
-            <EntradaMoeda
-              name="rateio_valor"
-              aria-label={`Valor da linha ${i + 1}`}
-              placeholder={varias ? "0,00" : "= total"}
-              value={l.valor}
-              onChange={(texto) => mudar(l.chave, "valor", texto)}
-              className="w-36"
-            />
-            {varias && (
-              <button
-                type="button"
-                onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))}
-                className="mt-1.5 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-                aria-label={`Tirar a linha ${i + 1}`}
-              >
-                <X className="size-4" />
-              </button>
-            )}
-          </div>
-        ))}
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => setLinhas((ls) => [...ls, { chave: Math.max(...ls.map((x) => x.chave)) + 1, conta: "", valor: "" }])}
-            className="inline-flex items-center gap-1 text-xs font-medium text-marca-700 hover:underline"
-          >
-            <Plus className="size-3.5" />
-            Dividir em mais uma conta
-          </button>
-          {falta !== null && (
-            <span className={falta === 0 ? "text-xs text-emerald-700" : "text-xs text-amber-700"}>
-              {falta === 0 ? "Soma confere" : `${falta > 0 ? "Faltam" : "Sobram"} ${formatar(Math.abs(falta))}`}
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-slate-500">
-          Ex.: parcela de empréstimo = amortização + juros. Com uma conta só, o valor da linha é o total.
-        </p>
-      </fieldset>
-      <label className="flex items-start gap-2 text-sm text-slate-700">
-        <input type="checkbox" name="juros_nao_segregados" className="mt-1" defaultChecked={l0?.juros_nao_segregados} />
-        <span>
-          Juros não segregados
-          <span className="block text-xs text-slate-500">
-            Parcela de dívida sem a separação entre principal e juros. O Axis não estima os juros.
-          </span>
-        </span>
-      </label>
+// Fornecedor ou cliente (0009). CPF/CNPJ pode vir com ou sem pontuação; o servidor guarda só os dígitos.
+export function CamposContraparte({ contraparte }: { contraparte?: Contraparte }) {
+  return (
+    <>
+      <Campo rotulo="Nome">
+        <Entrada name="nome" required defaultValue={contraparte?.nome ?? ""} placeholder="Dental Cremer, Laboratório Sorriso…" />
+      </Campo>
+      <Campo rotulo="Tipo">
+        <Selecao name="tipo" opcoes={TIPOS_CONTRAPARTE} defaultValue={contraparte?.tipo ?? "fornecedor"} />
+      </Campo>
+      <Campo rotulo="CPF ou CNPJ" dica="Opcional">
+        <Entrada name="documento" inputMode="numeric" defaultValue={formatarDocumento(contraparte?.documento ?? null) ?? ""} />
+      </Campo>
     </>
   );
 }

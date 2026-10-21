@@ -3,6 +3,7 @@ import type { ContaPlano, Lancamento } from "@/lib/financeiro/dominio";
 import {
   contasDaSelecao,
   despesasPorConta,
+  despesasPorContraparte,
   filtrarLancamentos,
   maioresDespesas,
   montarDre,
@@ -265,5 +266,30 @@ describe("eixo dos gráficos", () => {
     expect(e.hi).toBeGreaterThanOrEqual(1200);
     expect(e.marcas).toContain(0);
     expect(escala(0, 0)).toEqual({ lo: 0, hi: 1, marcas: [0] });
+  });
+});
+
+describe("fornecedores (0009)", () => {
+  const comFornecedor = lancamentos.map((l) =>
+    l.descricao === "lançamento 4" || l.descricao === "lançamento 6" ? { ...l, contraparte_id: "cremer" } : l.descricao === "lançamento 5" ? { ...l, contraparte_id: "lab" } : l,
+  );
+  const Q = (filtros = {}) => parcelas(comFornecedor, plano, "competencia", filtros, "2026-09-01", "2026-10-31");
+
+  it("despesas por fornecedor, com a linha dos sem fornecedor, somando o total das despesas", () => {
+    const f = despesasPorContraparte(Q(), new Map([["cremer", "Dental Cremer"], ["lab", "Laboratório"]]));
+    expect(f.map((x) => [x.id, x.nome, x.valor])).toEqual([
+      ["cremer", "Dental Cremer", 1700.3],
+      ["lab", "Laboratório", 50],
+      ["sem", "Sem fornecedor informado", -100],
+    ]);
+    expect(f.reduce((a, x) => a + x.valor, 0)).toBeCloseTo(resumir(Q()).despesas, 10);
+  });
+
+  it("filtro por fornecedor e por lançamentos sem fornecedor", () => {
+    expect(resumir(Q({ contraparte: "cremer" })).despesas).toBe(1700.3);
+    const sem = resumir(Q({ contraparte: "sem" }));
+    expect(sem.despesas + 1700.3 + 50).toBeCloseTo(resumir(Q()).despesas, 10);
+    const naBase = comFornecedor.filter((l) => l.situacao !== "cancelado");
+    expect(filtrarLancamentos(naBase, plano, { contraparte: "lab" }).map((x) => x.lancamento.descricao)).toEqual(["lançamento 5"]);
   });
 });

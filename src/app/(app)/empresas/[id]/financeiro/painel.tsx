@@ -5,11 +5,13 @@ import { GraficoMensal } from "@/components/graficos";
 import { CabecalhoCartao, Cartao, Vazio, classeBotao, cx, classeTabela as t } from "@/components/ui";
 import { formatarData, formatarPeriodo, formatarValor } from "@/lib/datas";
 import { carregarLancamentos, carregarSaldos } from "@/lib/financeiro/consultas";
-import { compararCodigo, type ContaCaixa, type ContaPlano, type Direcao } from "@/lib/financeiro/dominio";
+import { compararCodigo, type ContaCaixa, type ContaPlano, type Contraparte, type Direcao } from "@/lib/financeiro/dominio";
 import { mesesEntre, ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
 import {
   SECOES_DESPESA,
+  SEM_CONTRAPARTE,
   despesasPorConta,
+  despesasPorContraparte,
   maioresDespesas,
   parcelas,
   periodoAnterior,
@@ -17,6 +19,7 @@ import {
   seriesMensais,
   variacao,
   type Base,
+  type FatiaDespesa,
   type Filtros,
 } from "@/lib/financeiro/painel";
 import { FiltroPeriodo, classeFiltro } from "./filtro";
@@ -52,6 +55,7 @@ export function linkLancamentos(
   if (filtros.conta) p.set("conta", filtros.conta);
   if (filtros.tipo) p.set("tipo", filtros.tipo);
   if (filtros.secoes?.length) p.set("secoes", filtros.secoes.join(","));
+  if (filtros.contraparte) p.set("contraparte", filtros.contraparte);
   if (filtros.ordem) p.set("ordem", filtros.ordem);
   return `/empresas/${empresaId}/financeiro?${p}`;
 }
@@ -60,6 +64,8 @@ export async function AbaPainel({
   empresa,
   contas,
   caixas,
+  contrapartes,
+  recursos,
   periodo,
   base,
   filtros,
@@ -67,6 +73,8 @@ export async function AbaPainel({
   empresa: { id: string };
   contas: ContaPlano[];
   caixas: ContaCaixa[];
+  contrapartes: Contraparte[];
+  recursos: { fornecedores: boolean; extratos: boolean };
   periodo: { de: string; ate: string };
   base: Base;
   filtros: Filtros;
@@ -97,6 +105,7 @@ export async function AbaPainel({
   const mensal = seriesMensais(atual, meses);
   const fatias = despesasPorConta(atual);
   const maiores = maioresDespesas(atual);
+  const porFornecedor = recursos.fornecedores ? despesasPorContraparte(atual, new Map(contrapartes.map((c) => [c.id, c.nome]))) : [];
   const link = (f: Filtros & { ordem?: string }, de = periodo.de, ate = periodo.ate) =>
     linkLancamentos(empresa.id, base, de, ate, { ...filtros, ...f });
 
@@ -154,6 +163,7 @@ export async function AbaPainel({
             <option value="saida">Só despesas</option>
           </select>
         </label>
+        {recursos.fornecedores && <FiltroContraparte contrapartes={contrapartes} valor={filtros.contraparte} />}
       </FiltroPeriodo>
 
       <p className="text-xs text-slate-500">
@@ -217,15 +227,22 @@ export async function AbaPainel({
           {atual.length === 0 ? (
             <Cartao>
               <Vazio icone={<ChartColumn />}>
-                <p>Nenhum lançamento {filtros.caixa || filtros.conta || filtros.tipo ? "com esses filtros " : ""}neste período.</p>
+                <p>Nenhum lançamento {filtros.caixa || filtros.conta || filtros.tipo || filtros.contraparte ? "com esses filtros " : ""}neste período.</p>
                 <p className="mt-1">
                   Os gráficos aparecem assim que houver receitas ou despesas lançadas. Os números vêm só dos lançamentos
-                  cadastrados.
+                  cadastrados{recursos.extratos ? "; movimentações de extrato importadas só entram depois de conciliadas" : ""}.
                 </p>
-                <Link href="?aba=lancamentos" className={cx(classeBotao("primario", true), "mt-4")}>
-                  <Plus />
-                  Ir para os lançamentos
-                </Link>
+                <span className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Link href="?aba=lancamentos" className={classeBotao("primario", true)}>
+                    <Plus />
+                    Ir para os lançamentos
+                  </Link>
+                  {recursos.extratos && (
+                    <Link href="?aba=extratos" className={classeBotao("secundario", true)}>
+                      Importar extrato do banco
+                    </Link>
+                  )}
+                </span>
               </Vazio>
             </Cartao>
           ) : (
@@ -291,44 +308,28 @@ export async function AbaPainel({
               <div className="grid gap-6 lg:grid-cols-2">
                 <Cartao>
                   <CabecalhoCartao titulo="Despesas por categoria" />
-                  {fatias.length === 0 ? (
-                    <p className="px-5 py-4 text-sm text-slate-500">Nenhuma despesa no período.</p>
-                  ) : (
-                    <ul className="space-y-3 px-5 py-4">
-                      {fatias.map((f) => {
-                        const conteudo = (
-                          <>
-                            <span className="flex items-baseline justify-between gap-3 text-sm">
-                              <span className="min-w-0 truncate text-slate-700">{f.nome}</span>
-                              <span className="shrink-0 tabular-nums text-slate-900">
-                                {moeda(f.valor)}
-                                <span className="ml-2 text-xs text-slate-500">{percentual.format(f.participacao)}</span>
-                              </span>
-                            </span>
-                            <span className="mt-1 block h-2 rounded-full bg-slate-100">
-                              <span
-                                className="block h-2 rounded-full"
-                                style={{ width: `${Math.max(1, f.participacao * 100)}%`, background: "var(--grafico-2)" }}
-                              />
-                            </span>
-                          </>
-                        );
-                        return (
-                          <li key={f.id ?? "outras"}>
-                            {f.id ? (
-                              <Link href={link({ conta: f.id, secoes: [...SECOES_DESPESA] })} className="block rounded-md hover:bg-slate-50">
-                                {conteudo}
-                              </Link>
-                            ) : (
-                              conteudo
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
+                  <Barras fatias={fatias} link={(id) => link({ conta: id, secoes: [...SECOES_DESPESA] })} />
                 </Cartao>
-                <Cartao>
+                {recursos.fornecedores && (
+                  <Cartao>
+                    <CabecalhoCartao titulo="Principais fornecedores" />
+                    <Barras
+                      fatias={porFornecedor}
+                      link={(id) => link({ contraparte: id, secoes: [...SECOES_DESPESA] })}
+                      vazio={
+                        <>
+                          Nenhuma despesa no período.{" "}
+                          {contrapartes.length === 0 && (
+                            <Link href="?aba=fornecedores" className="font-medium text-marca-700 hover:underline">
+                              Cadastre os fornecedores
+                            </Link>
+                          )}
+                        </>
+                      }
+                    />
+                  </Cartao>
+                )}
+                <Cartao className={cx(recursos.fornecedores && "lg:col-span-2")}>
                   <CabecalhoCartao titulo="Maiores despesas do período">
                     <Link href={link({ secoes: [...SECOES_DESPESA], ordem: "maior" })} className="text-xs font-medium text-marca-700 hover:underline">
                       Ver todas
@@ -337,7 +338,7 @@ export async function AbaPainel({
                   {maiores.length === 0 ? (
                     <p className="px-5 py-4 text-sm text-slate-500">Nenhuma despesa no período.</p>
                   ) : (
-                    <ol className="divide-y divide-slate-100">
+                    <ol className={cx("divide-y divide-slate-100", recursos.fornecedores && "lg:grid lg:grid-flow-col lg:grid-rows-4 lg:gap-x-6 lg:divide-y-0")}>
                       {maiores.map((m, i) => (
                         <li key={m.lancamento.id} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
                           <span className="flex min-w-0 items-center gap-3">
@@ -372,6 +373,63 @@ export async function AbaPainel({
         </>
       )}
     </div>
+  );
+}
+
+// Barras horizontais de participação (categorias, fornecedores). Cada linha leva aos lançamentos dela.
+function Barras({ fatias, link, vazio }: { fatias: FatiaDespesa[]; link: (id: string) => string; vazio?: ReactNode }) {
+  if (fatias.length === 0) return <p className="px-5 py-4 text-sm text-slate-500">{vazio ?? "Nenhuma despesa no período."}</p>;
+  return (
+    <ul className="space-y-3 px-5 py-4">
+      {fatias.map((f) => {
+        const conteudo = (
+          <>
+            <span className="flex items-baseline justify-between gap-3 text-sm">
+              <span className={cx("min-w-0 truncate", f.id === SEM_CONTRAPARTE ? "italic text-slate-500" : "text-slate-700")}>{f.nome}</span>
+              <span className="shrink-0 tabular-nums text-slate-900">
+                {moeda(f.valor)}
+                <span className="ml-2 text-xs text-slate-500">{percentual.format(f.participacao)}</span>
+              </span>
+            </span>
+            <span className="mt-1 block h-2 rounded-full bg-slate-100">
+              <span
+                className="block h-2 rounded-full"
+                style={{ width: `${Math.min(100, Math.max(1, f.participacao * 100))}%`, background: "var(--grafico-2)" }}
+              />
+            </span>
+          </>
+        );
+        return (
+          <li key={f.id ?? "outras"}>
+            {f.id ? (
+              <Link href={link(f.id)} className="block rounded-md hover:bg-slate-50">
+                {conteudo}
+              </Link>
+            ) : (
+              conteudo
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function FiltroContraparte({ contrapartes, valor }: { contrapartes: Contraparte[]; valor?: string | null }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-slate-500">Fornecedor ou cliente</span>
+      <select name="contraparte" defaultValue={valor ?? ""} className={cx(classeFiltro, "max-w-56")}>
+        <option value="">Todos</option>
+        <option value={SEM_CONTRAPARTE}>(sem fornecedor ou cliente)</option>
+        {contrapartes.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.nome}
+            {c.ativa ? "" : " (inativo)"}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -426,8 +484,14 @@ function Indicador({
   );
 }
 
-export function lerFiltros(valor: (k: string) => string | undefined, contas: ContaPlano[], caixas: ContaCaixa[]): Filtros {
+export function lerFiltros(
+  valor: (k: string) => string | undefined,
+  contas: ContaPlano[],
+  caixas: ContaCaixa[],
+  contrapartes: Contraparte[],
+): Filtros {
   const caixa = valor("caixa");
+  const contraparte = valor("contraparte");
   const conta = valor("conta");
   const tipo = valor("tipo");
   const secoes = (valor("secoes") ?? "")
@@ -439,5 +503,6 @@ export function lerFiltros(valor: (k: string) => string | undefined, contas: Con
     conta: conta && contas.some((c) => c.id === conta) ? conta : null,
     tipo: tipo === "entrada" || tipo === "saida" ? (tipo as Direcao) : null,
     secoes: secoes.length ? secoes : null,
+    contraparte: contraparte === SEM_CONTRAPARTE || contrapartes.some((c) => c.id === contraparte) ? contraparte : null,
   };
 }
