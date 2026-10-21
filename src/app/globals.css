@@ -72,3 +72,21 @@ dialog[open] {
     animation: none;
   }
 }
+
+/* Gráficos: cores por papel (paleta validada para daltonismo, claro e escuro). O texto nunca usa estas cores. */
+:root {
+  --grafico-1: #2a78d6;
+  --grafico-2: #eb6834;
+  --grafico-3: #1baf7a;
+  --grafico-4: #eda100;
+  --grafico-negativo: #e34948;
+  --grafico-grade: #e8eaee;
+}
+html.dark {
+  --grafico-1: #3987e5;
+  --grafico-2: #d95926;
+  --grafico-3: #199e70;
+  --grafico-4: #c98500;
+  --grafico-negativo: #e66767;
+  --grafico-grade: oklch(31% 0.006 286);
+}

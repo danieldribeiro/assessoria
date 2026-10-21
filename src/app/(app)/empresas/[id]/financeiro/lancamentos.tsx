@@ -1,4 +1,5 @@
-import { ArrowLeftRight, CircleCheck, Pencil, Plus, ReceiptText } from "lucide-react";
+import { ArrowLeftRight, CircleCheck, Pencil, Plus, ReceiptText, X } from "lucide-react";
+import Link from "next/link";
 import { BotaoAcao } from "@/components/controles";
 import { PainelLateral } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t, type Tom } from "@/components/ui";
@@ -6,6 +7,7 @@ import { formatarData, formatarPeriodo, formatarValor } from "@/lib/datas";
 import { carregarLancamentos, carregarTransferencias } from "@/lib/financeiro/consultas";
 import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Lancamento, type SituacaoLancamento } from "@/lib/financeiro/dominio";
 import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
+import { ORDENS, filtrarLancamentos, ordenar, type Filtros, type Ordem } from "@/lib/financeiro/painel";
 import { cancelarLancamento, cancelarTransferencia, editarLancamento, lancar, liquidarLancamento, transferir } from "@/server/financeiro";
 import { CamposLancamento, CamposLiquidacao, CamposTransferencia } from "./campos";
 import { FiltroPeriodo, classeFiltro } from "./filtro";
@@ -23,21 +25,37 @@ export async function AbaLancamentos({
   caixas,
   periodo,
   situacao,
+  criterio,
+  filtros,
+  ordem,
 }: {
   empresa: { id: string };
   contas: ContaPlano[];
   caixas: ContaCaixa[];
   periodo: { de: string; ate: string };
   situacao?: string;
+  criterio: "movimento" | "competencia";
+  filtros: Filtros;
+  ordem: Ordem;
 }) {
   const inicio = `${periodo.de}-01`;
   const fim = ultimoDiaDoMes(`${periodo.ate}-01`);
   const [todos, transferencias] = await Promise.all([
-    carregarLancamentos(empresa.id, inicio, fim),
+    carregarLancamentos(empresa.id, inicio, fim, criterio),
     carregarTransferencias(empresa.id, inicio, fim),
   ]);
-  const filtro = situacao && situacao in SITUACOES ? (situacao as SituacaoLancamento) : null;
-  const lancamentos = filtro ? todos.filter((l) => l.situacao === filtro) : todos;
+  const filtro = situacao === "ativos" ? "ativos" : situacao && situacao in SITUACOES ? (situacao as SituacaoLancamento) : null;
+  const naSituacao = todos.filter((l) => !filtro || (filtro === "ativos" ? l.situacao !== "cancelado" : l.situacao === filtro));
+  const dataDaLinha = (l: Lancamento) =>
+    criterio === "competencia" ? l.data_competencia : (l.data_liquidacao ?? l.data_vencimento ?? l.data_competencia);
+  const filtrados = ordenar(filtrarLancamentos(naSituacao, contas, filtros), ordem, dataDaLinha);
+  const lancamentos = filtrados.map((f) => f.lancamento);
+  const selecao = new Map(filtrados.map((f) => [f.lancamento.id, f]));
+  const totalSelecao = filtrados
+    .filter((f) => f.lancamento.situacao !== "cancelado")
+    .reduce((a, f) => a + Math.round(f.valorSelecao * 100), 0) / 100;
+  const temFiltro = !!(filtros.caixa || filtros.conta || filtros.tipo || filtros.secoes?.length);
+  const nomeContaFiltro = filtros.conta ? contas.find((c) => c.id === filtros.conta) : null;
 
   const porId = new Map(contas.map((c) => [c.id, c]));
   const nomeCaixa = new Map(caixas.map((c) => [c.id, c.nome]));
@@ -62,13 +80,64 @@ export async function AbaLancamentos({
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FiltroPeriodo aba="lancamentos" de={periodo.de} ate={periodo.ate}>
+          {filtros.secoes?.length ? <input type="hidden" name="secoes" value={filtros.secoes.join(",")} /> : null}
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-500">Data</span>
+            <select name="data" defaultValue={criterio} className={classeFiltro}>
+              <option value="movimento">Pagamento ou vencimento</option>
+              <option value="competencia">Competência</option>
+            </select>
+          </label>
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-slate-500">Situação</span>
             <select name="situacao" defaultValue={filtro ?? ""} className={classeFiltro}>
               <option value="">Todas</option>
+              <option value="ativos">Previstos e realizados</option>
               {Object.entries(SITUACOES).map(([v, s]) => (
                 <option key={v} value={v}>
                   {s.rotulo}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-500">Tipo</span>
+            <select name="tipo" defaultValue={filtros.tipo ?? ""} className={classeFiltro}>
+              <option value="">Receitas e despesas</option>
+              <option value="entrada">Receitas</option>
+              <option value="saida">Despesas</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-500">Categoria</span>
+            <select name="conta" defaultValue={filtros.conta ?? ""} className={cx(classeFiltro, "max-w-56")}>
+              <option value="">Todas</option>
+              {[...contas]
+                .sort((a, b) => compararCodigo(a.codigo, b.codigo))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.codigo} · {c.nome}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-500">Conta de caixa</span>
+            <select name="caixa" defaultValue={filtros.caixa ?? ""} className={classeFiltro}>
+              <option value="">Todas</option>
+              {caixas.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-500">Ordem</span>
+            <select name="ordem" defaultValue={ordem} className={classeFiltro}>
+              {Object.entries(ORDENS).map(([v, r]) => (
+                <option key={v} value={v}>
+                  {r}
                 </option>
               ))}
             </select>
@@ -117,10 +186,34 @@ export async function AbaLancamentos({
         </p>
       )}
 
+      {(filtros.secoes?.length || nomeContaFiltro) && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          Mostrando só a parte do rateio
+          {nomeContaFiltro && ` na conta ${nomeContaFiltro.codigo} ${nomeContaFiltro.nome}`}
+          {filtros.secoes?.length ? ` nas linhas ${filtros.secoes.join(", ")} da DRE` : ""}.
+          {filtros.secoes?.length ? (
+            <Link
+              href={`?${new URLSearchParams({ aba: "lancamentos", de: periodo.de, ate: periodo.ate, data: criterio, ...(filtro ? { situacao: filtro } : {}) })}`}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-marca-700 hover:bg-marca-50"
+            >
+              <X className="size-3.5" />
+              Tirar os filtros
+            </Link>
+          ) : null}
+        </p>
+      )}
+
       <Cartao className="overflow-x-auto">
-        <CabecalhoCartao titulo={`Lançamentos · ${formatarPeriodo(inicio, fim)}`} contagem={lancamentos.length} />
+        <CabecalhoCartao titulo={`Lançamentos · ${formatarPeriodo(inicio, fim)}`} contagem={lancamentos.length}>
+          {lancamentos.length > 0 && (
+            <span className="text-xs text-slate-500">
+              {temFiltro || filtro ? "Total da seleção" : "Total"}, sem cancelados:{" "}
+              <span className={cx("font-semibold tabular-nums", totalSelecao < 0 ? "text-red-700" : "text-slate-900")}>{moeda(totalSelecao)}</span>
+            </span>
+          )}
+        </CabecalhoCartao>
         {lancamentos.length === 0 ? (
-          <Vazio icone={<ReceiptText />}>Nenhum lançamento neste período.</Vazio>
+          <Vazio icone={<ReceiptText />}>Nenhum lançamento {temFiltro || filtro ? "com esses filtros " : ""}neste período.</Vazio>
         ) : (
           <table className={t.tabela}>
             <thead className={t.cabeca}>
@@ -144,7 +237,8 @@ export async function AbaLancamentos({
                     <td className={`${t.td} whitespace-nowrap`}>
                       {formatarData(l.data_liquidacao ?? l.data_vencimento)}
                       {l.situacao === "previsto" && <span className="block text-xs text-slate-500">vencimento</span>}
-                      {l.data_competencia.slice(0, 7) !== (l.data_liquidacao ?? l.data_vencimento ?? "").slice(0, 7) && (
+                      {(criterio === "competencia" ||
+                        l.data_competencia.slice(0, 7) !== (l.data_liquidacao ?? l.data_vencimento ?? "").slice(0, 7)) && (
                         <span className="block text-xs text-slate-500">competência {formatarData(l.data_competencia)}</span>
                       )}
                     </td>
@@ -180,6 +274,11 @@ export async function AbaLancamentos({
                       )}
                     >
                       {moeda(sinal * l.valor_total)}
+                      {selecao.get(l.id)?.parcial && (
+                        <span className="block text-xs font-normal text-slate-500">
+                          {moeda(selecao.get(l.id)!.valorSelecao)} na seleção
+                        </span>
+                      )}
                     </td>
                     <td className={`${t.td} whitespace-nowrap text-right`}>
                       {l.situacao !== "cancelado" && (
