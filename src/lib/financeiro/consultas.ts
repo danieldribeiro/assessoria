@@ -40,17 +40,27 @@ export async function carregarSaldos(empresaId: string, data: string) {
   }));
 }
 
-// Lançamentos do período pela data do movimento: liquidação (realizado) ou vencimento (previsto e cancelado sem liquidação).
-export async function carregarLancamentos(empresaId: string, inicio: string, fim: string) {
+// Lançamentos do período. Pelo movimento: liquidação (realizado) ou vencimento (previsto e cancelado sem liquidação).
+// Pela competência: data de competência, em qualquer situação.
+export async function carregarLancamentos(
+  empresaId: string,
+  inicio: string,
+  fim: string,
+  criterio: "movimento" | "competencia" = "movimento",
+) {
   const supabase = await criarCliente();
-  const { data, error } = await supabase
+  let consulta = supabase
     .from("fin_lancamentos")
     .select("*, rateios:fin_lancamento_rateios(conta_id, valor)")
     .eq("empresa_id", empresaId)
-    .is("rateios.substituido_em", null)
-    .or(
-      `and(data_liquidacao.gte.${inicio},data_liquidacao.lte.${fim}),and(data_liquidacao.is.null,data_vencimento.gte.${inicio},data_vencimento.lte.${fim})`,
-    )
+    .is("rateios.substituido_em", null);
+  consulta =
+    criterio === "competencia"
+      ? consulta.gte("data_competencia", inicio).lte("data_competencia", fim)
+      : consulta.or(
+          `and(data_liquidacao.gte.${inicio},data_liquidacao.lte.${fim}),and(data_liquidacao.is.null,data_vencimento.gte.${inicio},data_vencimento.lte.${fim})`,
+        );
+  const { data, error } = await consulta
     .order("data_liquidacao", { ascending: false, nullsFirst: false })
     .order("data_vencimento", { ascending: false })
     .order("criado_em", { ascending: false });
