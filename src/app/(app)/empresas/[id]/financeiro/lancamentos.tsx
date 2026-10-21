@@ -1,16 +1,17 @@
-import { ArrowLeftRight, CircleCheck, Pencil, Plus, ReceiptText, X } from "lucide-react";
+import { ArrowLeftRight, CircleCheck, Landmark, Pencil, Plus, ReceiptText, X } from "lucide-react";
 import Link from "next/link";
 import { BotaoAcao } from "@/components/controles";
 import { PainelLateral } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t, type Tom } from "@/components/ui";
 import { formatarData, formatarPeriodo, formatarValor } from "@/lib/datas";
-import { carregarLancamentos, carregarTransferencias } from "@/lib/financeiro/consultas";
-import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Lancamento, type SituacaoLancamento } from "@/lib/financeiro/dominio";
+import { carregarConciliados, carregarLancamentos, carregarTransferencias, type BaseFinanceira } from "@/lib/financeiro/consultas";
+import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Contraparte, type Lancamento, type SituacaoLancamento } from "@/lib/financeiro/dominio";
 import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
 import { ORDENS, filtrarLancamentos, ordenar, type Filtros, type Ordem } from "@/lib/financeiro/painel";
 import { cancelarLancamento, cancelarTransferencia, editarLancamento, lancar, liquidarLancamento, transferir } from "@/server/financeiro";
 import { CamposLancamento, CamposLiquidacao, CamposTransferencia } from "./campos";
 import { FiltroPeriodo, classeFiltro } from "./filtro";
+import { FiltroContraparte } from "./painel";
 
 const moeda = (v: number) => formatarValor(v, "R$")!;
 const SITUACOES: Record<SituacaoLancamento, { rotulo: string; tom: Tom }> = {
@@ -23,6 +24,8 @@ export async function AbaLancamentos({
   empresa,
   contas,
   caixas,
+  contrapartes,
+  recursos,
   periodo,
   situacao,
   criterio,
@@ -32,6 +35,8 @@ export async function AbaLancamentos({
   empresa: { id: string };
   contas: ContaPlano[];
   caixas: ContaCaixa[];
+  contrapartes: Contraparte[];
+  recursos: BaseFinanceira["recursos"];
   periodo: { de: string; ate: string };
   situacao?: string;
   criterio: "movimento" | "competencia";
@@ -54,7 +59,16 @@ export async function AbaLancamentos({
   const totalSelecao = filtrados
     .filter((f) => f.lancamento.situacao !== "cancelado")
     .reduce((a, f) => a + Math.round(f.valorSelecao * 100), 0) / 100;
-  const temFiltro = !!(filtros.caixa || filtros.conta || filtros.tipo || filtros.secoes?.length);
+  const temFiltro = !!(filtros.caixa || filtros.conta || filtros.tipo || filtros.contraparte || filtros.secoes?.length);
+  const conciliados = recursos.extratos ? await carregarConciliados(empresa.id, lancamentos.map((l) => l.id)) : new Set<string>();
+  const nomeContraparte = new Map(contrapartes.map((c) => [c.id, c.nome]));
+  // Sem a migration 0009, os campos de fornecedor e observações ficam fora do formulário.
+  const opcoesContraparte = (atual?: string | null) =>
+    recursos.fornecedores
+      ? contrapartes
+          .filter((c) => c.ativa || c.id === atual)
+          .map((c) => ({ valor: c.id, rotulo: c.ativa ? c.nome : `${c.nome} (inativo)` }))
+      : null;
   const nomeContaFiltro = filtros.conta ? contas.find((c) => c.id === filtros.conta) : null;
 
   const porId = new Map(contas.map((c) => [c.id, c]));
@@ -132,6 +146,7 @@ export async function AbaLancamentos({
               ))}
             </select>
           </label>
+          {recursos.fornecedores && <FiltroContraparte contrapartes={contrapartes} valor={filtros.contraparte} />}
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-slate-500">Ordem</span>
             <select name="ordem" defaultValue={ordem} className={classeFiltro}>
@@ -173,7 +188,7 @@ export async function AbaLancamentos({
               rotuloSalvar="Lançar"
               aviso="Lançamento registrado"
             >
-              <CamposLancamento caixas={opcoesCaixa} contas={opcoesConta} />
+              <CamposLancamento caixas={opcoesCaixa} contas={opcoesConta} contrapartes={opcoesContraparte()} />
             </PainelLateral>
           </div>
         )}
@@ -245,6 +260,9 @@ export async function AbaLancamentos({
                     <td className={t.td}>
                       <span className={cx("font-medium", l.situacao === "cancelado" ? "line-through" : "text-slate-900")}>{l.descricao}</span>
                       {l.documento && <span className="text-xs text-slate-500"> · {l.documento}</span>}
+                      {l.contraparte_id && (
+                        <span className="block text-xs font-medium text-slate-600">{nomeContraparte.get(l.contraparte_id) ?? "fornecedor ou cliente"}</span>
+                      )}
                       <span className="mt-0.5 block space-y-0.5 text-xs text-slate-500">
                         {l.rateios.map((r, i) => {
                           const c = porId.get(r.conta_id);
@@ -256,6 +274,7 @@ export async function AbaLancamentos({
                           );
                         })}
                       </span>
+                      {l.observacoes && <span className="mt-0.5 block whitespace-pre-line text-xs italic text-slate-500">{l.observacoes}</span>}
                       {l.juros_nao_segregados && (
                         <Etiqueta tom="ambar" className="mt-1">
                           juros não segregados
@@ -265,6 +284,12 @@ export async function AbaLancamentos({
                     <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{nomeCaixa.get(l.conta_caixa_id)}</td>
                     <td className={t.td}>
                       <Etiqueta tom={s.tom}>{s.rotulo}</Etiqueta>
+                      {conciliados.has(l.id) && (
+                        <span className="mt-1 flex items-center gap-1 text-xs text-slate-500" title="Ligado a uma movimentação do extrato do banco">
+                          <Landmark className="size-3.5" />
+                          conciliado
+                        </span>
+                      )}
                     </td>
                     <td
                       className={cx(
@@ -298,7 +323,13 @@ export async function AbaLancamentos({
                           <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
                             Toda alteração fica registrada, com o valor de antes e o de depois.
                           </p>
-                          <CamposLancamento {...opcoesEdicao(l)} lancamento={l} />
+                          {conciliados.has(l.id) && (
+                            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                              Este lançamento está conciliado com o extrato do banco: valor, entrada ou saída, conta de caixa e
+                              situação não mudam. Para mudar, desfaça a conciliação na aba Extratos.
+                            </p>
+                          )}
+                          <CamposLancamento {...opcoesEdicao(l)} lancamento={l} contrapartes={opcoesContraparte(l.contraparte_id)} />
                         </PainelLateral>
                       )}
                       {l.situacao === "previsto" && (
@@ -318,7 +349,7 @@ export async function AbaLancamentos({
                           <CamposLiquidacao />
                         </PainelLateral>
                       )}
-                      {l.situacao !== "cancelado" && (
+                      {l.situacao !== "cancelado" && !conciliados.has(l.id) && (
                         <BotaoAcao
                           acao={cancelarLancamento.bind(null, l.id)}
                           pergunta={`Cancelar o lançamento “${l.descricao}”? Ele sai do saldo e do fluxo, mas continua registrado. Isso não pode ser desfeito.`}

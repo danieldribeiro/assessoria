@@ -126,7 +126,70 @@ export type Lancamento = {
   descricao: string;
   documento: string | null;
   juros_nao_segregados: boolean;
+  // 0009: fornecedor ou cliente e observações. Ficam vazios até a migration ser aplicada.
+  contraparte_id?: string | null;
+  observacoes?: string | null;
   rateios: { conta_id: string; valor: number }[];
+};
+
+export const TIPOS_CONTRAPARTE = [
+  { valor: "fornecedor", rotulo: "Fornecedor" },
+  { valor: "cliente", rotulo: "Cliente" },
+  { valor: "ambos", rotulo: "Fornecedor e cliente" },
+] as const;
+export type TipoContraparte = (typeof TIPOS_CONTRAPARTE)[number]["valor"];
+
+export type Contraparte = {
+  id: string;
+  empresa_id: string;
+  nome: string;
+  tipo: TipoContraparte;
+  documento: string | null;
+  ativa: boolean;
+};
+
+// CPF (11 dígitos) ou CNPJ (14), formatado para leitura.
+export function formatarDocumento(documento: string | null) {
+  if (!documento) return null;
+  if (documento.length === 11) return documento.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  if (documento.length === 14) return documento.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  return documento;
+}
+
+// Extratos importados (0010).
+export type SituacaoMovimento = "pendente" | "conciliado" | "ignorado";
+export type Movimento = {
+  id: string;
+  extrato_id: string;
+  conta_caixa_id: string;
+  data: string;
+  valor: number;
+  tipo_ofx: string | null;
+  descricao: string;
+  fitid: string | null;
+  documento: string | null;
+  situacao: SituacaoMovimento;
+  lancamento_id: string | null;
+  transferencia_id: string | null;
+  motivo: string | null;
+};
+export type Extrato = {
+  id: string;
+  conta_caixa_id: string;
+  arquivo_nome: string;
+  arquivo_sha256: string;
+  banco: string | null;
+  agencia: string | null;
+  conta: string | null;
+  periodo_inicio: string | null;
+  periodo_fim: string | null;
+  saldo_banco: number | null;
+  saldo_banco_em: string | null;
+  lidas: number;
+  novas: number;
+  duplicadas: number;
+  com_erro: number;
+  importado_em: string;
 };
 
 export type Transferencia = {
