@@ -1,13 +1,13 @@
 import { Scale } from "lucide-react";
 import Link from "next/link";
 import { CabecalhoCartao, Cartao, Vazio, cx, classeTabela as t } from "@/components/ui";
-import { formatarPeriodo, formatarValor } from "@/lib/datas";
+import { formatarValor } from "@/lib/datas";
 import { carregarLancamentos } from "@/lib/financeiro/consultas";
 import type { ContaCaixa, ContaPlano } from "@/lib/financeiro/dominio";
-import { mesesEntre, ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
-import { SECOES_DESPESA, montarDre, parcelas, periodoAnterior, variacao, type Filtros } from "@/lib/financeiro/painel";
-import { FiltroPeriodo, classeFiltro } from "./filtro";
-import { linkLancamentos } from "./painel";
+import { SECOES_DESPESA, montarDre, parcelas, variacao, type Filtros } from "@/lib/financeiro/painel";
+import { textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
+import { FiltroPeriodo } from "./filtro";
+import { FiltroCaixa, filtrosAtivos, linkLancamentos } from "./painel";
 
 const moeda = (v: number) => formatarValor(v, "R$")!;
 const percentual = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 });
@@ -27,21 +27,17 @@ export async function AbaResultado({
   empresa: { id: string };
   contas: ContaPlano[];
   caixas: ContaCaixa[];
-  periodo: { de: string; ate: string };
+  periodo: Periodo;
   filtros: Filtros;
 }) {
-  const meses = mesesEntre(periodo.de, periodo.ate);
-  const inicio = meses[0];
-  const fim = ultimoDiaDoMes(meses[meses.length - 1]);
-  const anterior = periodoAnterior(periodo.de, periodo.ate);
-  const inicioAnterior = `${anterior.de}-01`;
-  const fimAnterior = ultimoDiaDoMes(`${anterior.ate}-01`);
+  const { meses, inicio, fim } = periodo;
+  const { inicio: inicioAnterior, fim: fimAnterior } = periodo.anterior;
   const lancamentos = await carregarLancamentos(empresa.id, inicioAnterior, fim, "competencia");
   const filtro = { caixa: filtros.caixa };
   const dre = montarDre(parcelas(lancamentos, contas, "competencia", filtro, inicio, fim), meses);
   const dreAnterior = montarDre(
     parcelas(lancamentos, contas, "competencia", filtro, inicioAnterior, fimAnterior),
-    mesesEntre(anterior.de, anterior.ate),
+    periodo.anterior.meses,
   );
   const totalAnterior = new Map(dreAnterior.linhas.map((l) => [l.numero, l.total]));
   const faturamento = dre.linhas[0].total;
@@ -53,19 +49,12 @@ export async function AbaResultado({
 
   return (
     <div className="space-y-6">
-      <FiltroPeriodo aba="resultado" de={periodo.de} ate={periodo.ate}>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Conta de caixa</span>
-          <select name="caixa" defaultValue={filtros.caixa ?? ""} className={classeFiltro}>
-            <option value="">Todas</option>
-            {caixas.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-      </FiltroPeriodo>
+      <FiltroPeriodo
+        aba="resultado"
+        periodo={periodo}
+        ativos={filtrosAtivos({ caixa: filtros.caixa }, contas, caixas, [])}
+        filtros={<FiltroCaixa caixas={caixas} valor={filtros.caixa} />}
+      />
 
       <p className="text-xs text-slate-500">
         Resultado por competência: cada lançamento entra no mês da competência, previsto ou realizado, e cancelado não
@@ -77,7 +66,7 @@ export async function AbaResultado({
       </p>
 
       <Cartao className="overflow-x-auto">
-        <CabecalhoCartao titulo={`Resultado gerencial · ${formatarPeriodo(inicio, fim)}`} />
+        <CabecalhoCartao titulo={`Resultado gerencial · ${textoPeriodo(inicio, fim)}`} />
         {vazio ? (
           <Vazio icone={<Scale />}>
             Nenhum lançamento com competência neste período.{" "}
@@ -94,7 +83,7 @@ export async function AbaResultado({
                 {mostrarMeses && meses.map((m) => <th key={m} className={`${t.th} text-right`}>{nomeMes(m)}</th>)}
                 <th className={`${t.th} text-right`}>Total</th>
                 <th className={`${t.th} text-right`}>% </th>
-                <th className={`${t.th} whitespace-nowrap text-right`}>{formatarPeriodo(inicioAnterior, fimAnterior)}</th>
+                <th className={`${t.th} whitespace-nowrap text-right`}>{textoPeriodo(inicioAnterior, fimAnterior)}</th>
                 <th className={`${t.th} text-right`}>Variação</th>
               </tr>
             </thead>

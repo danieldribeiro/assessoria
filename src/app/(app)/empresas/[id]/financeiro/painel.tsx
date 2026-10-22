@@ -3,10 +3,10 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { GraficoMensal } from "@/components/graficos";
 import { CabecalhoCartao, Cartao, Vazio, classeBotao, cx, classeTabela as t } from "@/components/ui";
-import { formatarData, formatarPeriodo, formatarValor } from "@/lib/datas";
+import { formatarData, formatarValor } from "@/lib/datas";
 import { carregarLancamentos, carregarSaldos } from "@/lib/financeiro/consultas";
 import { compararCodigo, type ContaCaixa, type ContaPlano, type Contraparte, type Direcao } from "@/lib/financeiro/dominio";
-import { mesesEntre, ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
+import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
 import {
   SECOES_DESPESA,
   SEM_CONTRAPARTE,
@@ -14,7 +14,6 @@ import {
   despesasPorContraparte,
   maioresDespesas,
   parcelas,
-  periodoAnterior,
   resumir,
   seriesMensais,
   variacao,
@@ -22,7 +21,9 @@ import {
   type FatiaDespesa,
   type Filtros,
 } from "@/lib/financeiro/painel";
-import { FiltroPeriodo, classeFiltro } from "./filtro";
+import { montarPeriodo, textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
+import { CampoFiltro, FiltroPeriodo, classeFiltro } from "./filtro";
+import { Alternador, type FiltroAtivo } from "./filtros-ui";
 
 const moeda = (v: number) => formatarValor(v, "R$")!;
 const percentual = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 });
@@ -75,23 +76,19 @@ export async function AbaPainel({
   caixas: ContaCaixa[];
   contrapartes: Contraparte[];
   recursos: { fornecedores: boolean; extratos: boolean };
-  periodo: { de: string; ate: string };
+  periodo: Periodo;
   base: Base;
   filtros: Filtros;
 }) {
-  const meses = mesesEntre(periodo.de, periodo.ate);
-  const inicio = meses[0];
-  const fim = ultimoDiaDoMes(meses[meses.length - 1]);
-  const anterior = periodoAnterior(periodo.de, periodo.ate);
-  const inicioAnterior = `${anterior.de}-01`;
-  const fimAnterior = ultimoDiaDoMes(`${anterior.ate}-01`);
+  const { meses, inicio, fim } = periodo;
+  const { inicio: inicioAnterior, fim: fimAnterior } = periodo.anterior;
   const mesesSaldo = meses.slice(-MAX_MESES_SALDO);
 
   const [lancamentos, saldosFim, saldosAnterior, ...saldosMes] = await Promise.all([
     carregarLancamentos(empresa.id, inicioAnterior, fim, base === "competencia" ? "competencia" : "movimento"),
     carregarSaldos(empresa.id, fim),
     carregarSaldos(empresa.id, fimAnterior),
-    ...mesesSaldo.map((m) => carregarSaldos(empresa.id, ultimoDiaDoMes(m))),
+    ...mesesSaldo.map((m) => carregarSaldos(empresa.id, ultimoDiaDoMes(m) < fim ? ultimoDiaDoMes(m) : fim)),
   ]);
 
   const atual = parcelas(lancamentos, contas, base, filtros, inicio, fim);
@@ -106,6 +103,11 @@ export async function AbaPainel({
   const fatias = despesasPorConta(atual);
   const maiores = maioresDespesas(atual);
   const porFornecedor = recursos.fornecedores ? despesasPorContraparte(atual, new Map(contrapartes.map((c) => [c.id, c.nome]))) : [];
+  // Um mês do gráfico, cortado nos limites do período (o primeiro e o último mês podem estar incompletos).
+  const noMes = (m: string): [string, string] => {
+    const q = montarPeriodo(m < inicio ? inicio : m, ultimoDiaDoMes(m) > fim ? fim : ultimoDiaDoMes(m));
+    return [q.de, q.ate];
+  };
   const link = (f: Filtros & { ordem?: string }, de = periodo.de, ate = periodo.ate) =>
     linkLancamentos(empresa.id, base, de, ate, { ...filtros, ...f });
 
@@ -120,51 +122,41 @@ export async function AbaPainel({
         }))
       : [{ nome: "Todas as contas", forma: "linha" as const, cor: 1 as const, valores: saldosMes.map(somaSaldo) }];
 
-  const opcoesConta = [...contas].sort((a, b) => compararCodigo(a.codigo, b.codigo));
-  const textoAnterior = `vs ${formatarPeriodo(inicioAnterior, fimAnterior)}`;
+  const textoAnterior = `vs ${textoPeriodo(inicioAnterior, fimAnterior)}`;
 
   return (
     <div className="space-y-6">
-      <FiltroPeriodo aba="painel" de={periodo.de} ate={periodo.ate}>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Visão</span>
-          <select name="visao" defaultValue={base} className={classeFiltro}>
-            <option value="competencia">Competência</option>
-            <option value="caixa">Caixa</option>
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Conta de caixa</span>
-          <select name="caixa" defaultValue={filtros.caixa ?? ""} className={classeFiltro}>
-            <option value="">Todas</option>
-            {caixas.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Categoria</span>
-          <select name="conta" defaultValue={filtros.conta ?? ""} className={cx(classeFiltro, "max-w-56")}>
-            <option value="">Todas</option>
-            {opcoesConta.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.codigo} · {c.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Tipo</span>
-          <select name="tipo" defaultValue={filtros.tipo ?? ""} className={classeFiltro}>
-            <option value="">Receitas e despesas</option>
-            <option value="entrada">Só receitas</option>
-            <option value="saida">Só despesas</option>
-          </select>
-        </label>
-        {recursos.fornecedores && <FiltroContraparte contrapartes={contrapartes} valor={filtros.contraparte} />}
-      </FiltroPeriodo>
+      <FiltroPeriodo
+        aba="painel"
+        periodo={periodo}
+        ocultos={filtros.secoes?.length ? { secoes: filtros.secoes.join(",") } : undefined}
+        principal={
+          <Alternador
+            nome="visao"
+            rotulo="Visão"
+            valor={base}
+            opcoes={[
+              { valor: "competencia", rotulo: "Competência" },
+              { valor: "caixa", rotulo: "Caixa" },
+            ]}
+          />
+        }
+        ativos={filtrosAtivos(filtros, contas, caixas, contrapartes)}
+        filtros={
+          <>
+            <CampoFiltro rotulo="Tipo">
+              <select name="tipo" defaultValue={filtros.tipo ?? ""} className={classeFiltro}>
+                <option value="">Receitas e despesas</option>
+                <option value="entrada">Só receitas</option>
+                <option value="saida">Só despesas</option>
+              </select>
+            </CampoFiltro>
+            <FiltroCategoria contas={contas} valor={filtros.conta} />
+            <FiltroCaixa caixas={caixas} valor={filtros.caixa} />
+            {recursos.fornecedores && <FiltroContraparte contrapartes={contrapartes} valor={filtros.contraparte} />}
+          </>
+        }
+      />
 
       <p className="text-xs text-slate-500">
         Visão por {NOME_BASE[base].charAt(0).toLowerCase() + NOME_BASE[base].slice(1)}. Transferências entre contas
@@ -258,7 +250,7 @@ export async function AbaPainel({
                         { nome: "Faturamento", forma: "coluna", cor: 1, valores: mensal.map((m) => m.faturamento) },
                         { nome: "Despesas", forma: "coluna", cor: 2, valores: mensal.map((m) => m.despesas) },
                       ]}
-                      links={meses.map((m) => link({ secoes: SECOES_RESULTADO }, m.slice(0, 7), m.slice(0, 7)))}
+                      links={meses.map((m) => link({ secoes: SECOES_RESULTADO }, ...noMes(m)))}
                     />
                   </div>
                 </Cartao>
@@ -271,7 +263,7 @@ export async function AbaPainel({
                       series={[
                         { nome: "Resultado operacional", forma: "coluna", cor: 1, sinal: true, valores: mensal.map((m) => m.resultado) },
                       ]}
-                      links={meses.map((m) => link({ secoes: SECOES_RESULTADO }, m.slice(0, 7), m.slice(0, 7)))}
+                      links={meses.map((m) => link({ secoes: SECOES_RESULTADO }, ...noMes(m)))}
                     />
                   </div>
                 </Cartao>
@@ -417,9 +409,8 @@ function Barras({ fatias, link, vazio }: { fatias: FatiaDespesa[]; link: (id: st
 
 export function FiltroContraparte({ contrapartes, valor }: { contrapartes: Contraparte[]; valor?: string | null }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-slate-500">Fornecedor ou cliente</span>
-      <select name="contraparte" defaultValue={valor ?? ""} className={cx(classeFiltro, "max-w-56")}>
+    <CampoFiltro rotulo="Fornecedor ou cliente">
+      <select name="contraparte" defaultValue={valor ?? ""} className={classeFiltro}>
         <option value="">Todos</option>
         <option value={SEM_CONTRAPARTE}>(sem fornecedor ou cliente)</option>
         {contrapartes.map((c) => (
@@ -429,8 +420,56 @@ export function FiltroContraparte({ contrapartes, valor }: { contrapartes: Contr
           </option>
         ))}
       </select>
-    </label>
+    </CampoFiltro>
   );
+}
+
+export function FiltroCaixa({ caixas, valor, nome = "caixa" }: { caixas: ContaCaixa[]; valor?: string | null; nome?: string }) {
+  return (
+    <CampoFiltro rotulo="Conta de caixa">
+      <select name={nome} defaultValue={valor ?? ""} className={classeFiltro}>
+        <option value="">Todas</option>
+        {caixas.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.nome}
+          </option>
+        ))}
+      </select>
+    </CampoFiltro>
+  );
+}
+
+export function FiltroCategoria({ contas, valor }: { contas: ContaPlano[]; valor?: string | null }) {
+  return (
+    <CampoFiltro rotulo="Categoria">
+      <select name="conta" defaultValue={valor ?? ""} className={classeFiltro}>
+        <option value="">Todas</option>
+        {[...contas]
+          .sort((a, b) => compararCodigo(a.codigo, b.codigo))
+          .map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.codigo} · {c.nome}
+            </option>
+          ))}
+      </select>
+    </CampoFiltro>
+  );
+}
+
+// Filtros comuns em uso, para as etiquetas com X embaixo da barra.
+export function filtrosAtivos(filtros: Filtros, contas: ContaPlano[], caixas: ContaCaixa[], contrapartes: Contraparte[]): FiltroAtivo[] {
+  const saida: FiltroAtivo[] = [];
+  if (filtros.tipo) saida.push({ chaves: ["tipo"], rotulo: filtros.tipo === "entrada" ? "Só receitas" : "Só despesas" });
+  const conta = filtros.conta && contas.find((c) => c.id === filtros.conta);
+  if (conta) saida.push({ chaves: ["conta"], rotulo: `Categoria: ${conta.codigo} ${conta.nome}` });
+  const caixa = filtros.caixa && caixas.find((c) => c.id === filtros.caixa);
+  if (caixa) saida.push({ chaves: ["caixa"], rotulo: `Conta: ${caixa.nome}` });
+  if (filtros.contraparte) {
+    const nome = filtros.contraparte === SEM_CONTRAPARTE ? "sem fornecedor ou cliente" : contrapartes.find((c) => c.id === filtros.contraparte)?.nome;
+    if (nome) saida.push({ chaves: ["contraparte"], rotulo: filtros.contraparte === SEM_CONTRAPARTE ? "Sem fornecedor ou cliente" : `Fornecedor ou cliente: ${nome}` });
+  }
+  if (filtros.secoes?.length) saida.push({ chaves: ["secoes"], rotulo: `Linhas ${filtros.secoes.join(", ")} da DRE` });
+  return saida;
 }
 
 function Indicador({

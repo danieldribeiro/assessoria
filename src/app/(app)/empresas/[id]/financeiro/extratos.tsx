@@ -3,7 +3,7 @@ import Link from "next/link";
 import { BotaoAcao } from "@/components/controles";
 import { PainelLateral } from "@/components/painel-lateral";
 import { AreaTexto, CabecalhoCartao, Campo, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t, type Tom } from "@/components/ui";
-import { formatarData, formatarPeriodo, formatarValor } from "@/lib/datas";
+import { formatarData, formatarValor } from "@/lib/datas";
 import {
   carregarConciliados,
   carregarExtratos,
@@ -13,11 +13,12 @@ import {
   carregarTransferencias,
 } from "@/lib/financeiro/consultas";
 import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Contraparte, type SituacaoMovimento } from "@/lib/financeiro/dominio";
-import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
 import { candidatosConciliacao, candidatosTransferencia, somarDias } from "@/lib/financeiro/ofx";
 import { conciliarComFormulario, desfazerConciliacao, ignorarMovimento, lancarDoExtrato } from "@/server/financeiro";
 import { CamposLancamento } from "./campos";
-import { FiltroPeriodo, classeFiltro } from "./filtro";
+import { textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
+import { FiltroPeriodo } from "./filtro";
+import { FiltroCaixa, filtrosAtivos } from "./painel";
 import { ImportarExtrato } from "./importar-extrato";
 
 const moeda = (v: number) => formatarValor(v, "R$")!;
@@ -44,12 +45,11 @@ export async function AbaExtratos({
   contas: ContaPlano[];
   caixas: ContaCaixa[];
   contrapartes: Contraparte[];
-  periodo: { de: string; ate: string };
+  periodo: Periodo;
   caixa: string | null;
   situacao: SituacaoMovimento | "todas";
 }) {
-  const inicio = `${periodo.de}-01`;
-  const fim = ultimoDiaDoMes(`${periodo.ate}-01`);
+  const { inicio, fim } = periodo;
   const [movimentos, extratos, lancamentos, transferencias] = await Promise.all([
     carregarMovimentosExtrato(empresa.id, inicio, fim, caixa),
     carregarExtratos(empresa.id),
@@ -96,31 +96,14 @@ export async function AbaExtratos({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <FiltroPeriodo aba="extratos" de={periodo.de} ate={periodo.ate}>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Conta de caixa</span>
-            <select name="caixa" defaultValue={caixa ?? ""} className={classeFiltro}>
-              <option value="">Todas</option>
-              {caixas.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Situação</span>
-            <select name="situacao" defaultValue={situacao} className={classeFiltro}>
-              <option value="pendente">Pendentes</option>
-              <option value="conciliado">Conciliadas</option>
-              <option value="ignorado">Ignoradas</option>
-              <option value="todas">Todas</option>
-            </select>
-          </label>
-        </FiltroPeriodo>
-        <ImportarExtrato empresaId={empresa.id} caixas={opcoesCaixa} />
-      </div>
+      <FiltroPeriodo
+        aba="extratos"
+        periodo={periodo}
+        ocultos={{ situacao }}
+        ativos={filtrosAtivos({ caixa }, contas, caixas, [])}
+        filtros={<FiltroCaixa caixas={caixas} valor={caixa} />}
+        acoes={<ImportarExtrato empresaId={empresa.id} caixas={opcoesCaixa} />}
+      />
 
       <p className="text-xs text-slate-500">
         As movimentações do extrato não mudam saldo nem resultado. Elas servem para conferir: cada uma é relacionada a um
@@ -156,7 +139,7 @@ export async function AbaExtratos({
       )}
 
       <Cartao className="overflow-x-auto">
-        <CabecalhoCartao titulo={`Movimentações do banco · ${formatarPeriodo(inicio, fim)}`} contagem={lista.length}>
+        <CabecalhoCartao titulo={`Movimentações do banco · ${textoPeriodo(inicio, fim)}`} contagem={lista.length}>
           <span className="flex flex-wrap gap-1.5 text-xs">
             {(Object.keys(SITUACOES) as SituacaoMovimento[]).map((s) => (
               <Link
@@ -168,6 +151,12 @@ export async function AbaExtratos({
                 {contagem(s) === 1 ? "" : "s"}
               </Link>
             ))}
+            <Link
+              href={consulta({ situacao: "todas" })}
+              className={cx("rounded-full px-2 py-0.5", situacao === "todas" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}
+            >
+              todas
+            </Link>
           </span>
         </CabecalhoCartao>
         {situacao === "pendente" && lista.length > 0 && (

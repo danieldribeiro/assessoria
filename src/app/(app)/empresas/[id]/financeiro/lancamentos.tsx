@@ -1,17 +1,17 @@
-import { ArrowLeftRight, CircleCheck, Landmark, Pencil, Plus, ReceiptText, X } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeftRight, CircleCheck, Landmark, Pencil, Plus, ReceiptText } from "lucide-react";
 import { BotaoAcao } from "@/components/controles";
 import { PainelLateral } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t, type Tom } from "@/components/ui";
-import { formatarData, formatarPeriodo, formatarValor } from "@/lib/datas";
+import { formatarData, formatarValor } from "@/lib/datas";
 import { carregarConciliados, carregarLancamentos, carregarTransferencias, type BaseFinanceira } from "@/lib/financeiro/consultas";
 import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Contraparte, type Lancamento, type SituacaoLancamento } from "@/lib/financeiro/dominio";
-import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
 import { ORDENS, filtrarLancamentos, ordenar, type Filtros, type Ordem } from "@/lib/financeiro/painel";
 import { cancelarLancamento, cancelarTransferencia, editarLancamento, lancar, liquidarLancamento, transferir } from "@/server/financeiro";
 import { CamposLancamento, CamposLiquidacao, CamposTransferencia } from "./campos";
-import { FiltroPeriodo, classeFiltro } from "./filtro";
-import { FiltroContraparte } from "./painel";
+import { textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
+import { CampoFiltro, FiltroPeriodo, classeFiltro } from "./filtro";
+import { SelectAuto, type FiltroAtivo } from "./filtros-ui";
+import { FiltroCaixa, FiltroCategoria, FiltroContraparte, filtrosAtivos } from "./painel";
 
 const moeda = (v: number) => formatarValor(v, "R$")!;
 const SITUACOES: Record<SituacaoLancamento, { rotulo: string; tom: Tom }> = {
@@ -37,14 +37,13 @@ export async function AbaLancamentos({
   caixas: ContaCaixa[];
   contrapartes: Contraparte[];
   recursos: BaseFinanceira["recursos"];
-  periodo: { de: string; ate: string };
+  periodo: Periodo;
   situacao?: string;
   criterio: "movimento" | "competencia";
   filtros: Filtros;
   ordem: Ordem;
 }) {
-  const inicio = `${periodo.de}-01`;
-  const fim = ultimoDiaDoMes(`${periodo.ate}-01`);
+  const { inicio, fim } = periodo;
   const [todos, transferencias] = await Promise.all([
     carregarLancamentos(empresa.id, inicio, fim, criterio),
     carregarTransferencias(empresa.id, inicio, fim),
@@ -60,6 +59,11 @@ export async function AbaLancamentos({
     .filter((f) => f.lancamento.situacao !== "cancelado")
     .reduce((a, f) => a + Math.round(f.valorSelecao * 100), 0) / 100;
   const temFiltro = !!(filtros.caixa || filtros.conta || filtros.tipo || filtros.contraparte || filtros.secoes?.length);
+  const ativos: FiltroAtivo[] = [
+    ...(filtro ? [{ chaves: ["situacao"], rotulo: filtro === "ativos" ? "Previstos e realizados" : SITUACOES[filtro].rotulo }] : []),
+    ...filtrosAtivos(filtros, contas, caixas, contrapartes),
+    ...(criterio === "competencia" ? [{ chaves: ["data"], rotulo: "Pela competência" }] : []),
+  ];
   const conciliados = recursos.extratos ? await carregarConciliados(empresa.id, lancamentos.map((l) => l.id)) : new Set<string>();
   const nomeContraparte = new Map(contrapartes.map((c) => [c.id, c.nome]));
   // Sem a migration 0009, os campos de fornecedor e observações ficam fora do formulário.
@@ -69,7 +73,6 @@ export async function AbaLancamentos({
           .filter((c) => c.ativa || c.id === atual)
           .map((c) => ({ valor: c.id, rotulo: c.ativa ? c.nome : `${c.nome} (inativo)` }))
       : null;
-  const nomeContaFiltro = filtros.conta ? contas.find((c) => c.id === filtros.conta) : null;
 
   const porId = new Map(contas.map((c) => [c.id, c]));
   const nomeCaixa = new Map(caixas.map((c) => [c.id, c.nome]));
@@ -92,107 +95,79 @@ export async function AbaLancamentos({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <FiltroPeriodo aba="lancamentos" de={periodo.de} ate={periodo.ate}>
-          {filtros.secoes?.length ? <input type="hidden" name="secoes" value={filtros.secoes.join(",")} /> : null}
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Data</span>
-            <select name="data" defaultValue={criterio} className={classeFiltro}>
-              <option value="movimento">Pagamento ou vencimento</option>
-              <option value="competencia">Competência</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Situação</span>
-            <select name="situacao" defaultValue={filtro ?? ""} className={classeFiltro}>
-              <option value="">Todas</option>
-              <option value="ativos">Previstos e realizados</option>
-              {Object.entries(SITUACOES).map(([v, s]) => (
-                <option key={v} value={v}>
-                  {s.rotulo}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Tipo</span>
-            <select name="tipo" defaultValue={filtros.tipo ?? ""} className={classeFiltro}>
-              <option value="">Receitas e despesas</option>
-              <option value="entrada">Receitas</option>
-              <option value="saida">Despesas</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Categoria</span>
-            <select name="conta" defaultValue={filtros.conta ?? ""} className={cx(classeFiltro, "max-w-56")}>
-              <option value="">Todas</option>
-              {[...contas]
-                .sort((a, b) => compararCodigo(a.codigo, b.codigo))
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.codigo} · {c.nome}
+      <FiltroPeriodo
+        aba="lancamentos"
+        periodo={periodo}
+        ocultos={filtros.secoes?.length ? { secoes: filtros.secoes.join(",") } : undefined}
+        ativos={ativos}
+        filtros={
+          <>
+            <CampoFiltro rotulo="Situação">
+              <select name="situacao" defaultValue={filtro ?? ""} className={classeFiltro}>
+                <option value="">Todas</option>
+                <option value="ativos">Previstos e realizados</option>
+                {Object.entries(SITUACOES).map(([v, s]) => (
+                  <option key={v} value={v}>
+                    {s.rotulo}
                   </option>
                 ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Conta de caixa</span>
-            <select name="caixa" defaultValue={filtros.caixa ?? ""} className={classeFiltro}>
-              <option value="">Todas</option>
-              {caixas.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </label>
-          {recursos.fornecedores && <FiltroContraparte contrapartes={contrapartes} valor={filtros.contraparte} />}
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Ordem</span>
-            <select name="ordem" defaultValue={ordem} className={classeFiltro}>
-              {Object.entries(ORDENS).map(([v, r]) => (
-                <option key={v} value={v}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </label>
-        </FiltroPeriodo>
-        {podeLancar && (
-          <div className="flex flex-wrap gap-2">
-            <PainelLateral
-              titulo="Nova transferência entre contas"
-              gatilho={
-                <>
-                  <ArrowLeftRight />
-                  Transferência
-                </>
-              }
-              classeGatilho={classeBotao("secundario")}
-              acao={transferir.bind(null, empresa.id)}
-              rotuloSalvar="Registrar transferência"
-              aviso="Transferência registrada"
-            >
-              <CamposTransferencia caixas={opcoesCaixa} />
-            </PainelLateral>
-            <PainelLateral
-              titulo="Novo lançamento"
-              gatilho={
-                <>
-                  <Plus />
-                  Lançamento
-                </>
-              }
-              classeGatilho={classeBotao("primario")}
-              acao={lancar.bind(null, empresa.id)}
-              rotuloSalvar="Lançar"
-              aviso="Lançamento registrado"
-            >
-              <CamposLancamento caixas={opcoesCaixa} contas={opcoesConta} contrapartes={opcoesContraparte()} />
-            </PainelLateral>
-          </div>
-        )}
-      </div>
+              </select>
+            </CampoFiltro>
+            <CampoFiltro rotulo="Tipo">
+              <select name="tipo" defaultValue={filtros.tipo ?? ""} className={classeFiltro}>
+                <option value="">Receitas e despesas</option>
+                <option value="entrada">Receitas</option>
+                <option value="saida">Despesas</option>
+              </select>
+            </CampoFiltro>
+            <FiltroCategoria contas={contas} valor={filtros.conta} />
+            <FiltroCaixa caixas={caixas} valor={filtros.caixa} />
+            {recursos.fornecedores && <FiltroContraparte contrapartes={contrapartes} valor={filtros.contraparte} />}
+            <CampoFiltro rotulo="Data usada no período">
+              <select name="data" defaultValue={criterio} className={classeFiltro}>
+                <option value="movimento">Pagamento ou vencimento</option>
+                <option value="competencia">Competência</option>
+              </select>
+            </CampoFiltro>
+          </>
+        }
+        acoes={
+          podeLancar && (
+              <div className="flex flex-wrap gap-2">
+                <PainelLateral
+                  titulo="Nova transferência entre contas"
+                  gatilho={
+                    <>
+                      <ArrowLeftRight />
+                      Transferência
+                    </>
+                  }
+                  classeGatilho={classeBotao("secundario")}
+                  acao={transferir.bind(null, empresa.id)}
+                  rotuloSalvar="Registrar transferência"
+                  aviso="Transferência registrada"
+                >
+                  <CamposTransferencia caixas={opcoesCaixa} />
+                </PainelLateral>
+                <PainelLateral
+                  titulo="Novo lançamento"
+                  gatilho={
+                    <>
+                      <Plus />
+                      Lançamento
+                    </>
+                  }
+                  classeGatilho={classeBotao("primario")}
+                  acao={lancar.bind(null, empresa.id)}
+                  rotuloSalvar="Lançar"
+                  aviso="Lançamento registrado"
+                >
+                  <CamposLancamento caixas={opcoesCaixa} contas={opcoesConta} contrapartes={opcoesContraparte()} />
+                </PainelLateral>
+              </div>
+          )
+        }
+      />
 
       {!podeLancar && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -201,31 +176,30 @@ export async function AbaLancamentos({
         </p>
       )}
 
-      {(filtros.secoes?.length || nomeContaFiltro) && (
-        <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-          Mostrando só a parte do rateio
-          {nomeContaFiltro && ` na conta ${nomeContaFiltro.codigo} ${nomeContaFiltro.nome}`}
-          {filtros.secoes?.length ? ` nas linhas ${filtros.secoes.join(", ")} da DRE` : ""}.
-          {filtros.secoes?.length ? (
-            <Link
-              href={`?${new URLSearchParams({ aba: "lancamentos", de: periodo.de, ate: periodo.ate, data: criterio, ...(filtro ? { situacao: filtro } : {}) })}`}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-marca-700 hover:bg-marca-50"
-            >
-              <X className="size-3.5" />
-              Tirar os filtros
-            </Link>
-          ) : null}
-        </p>
+      {(filtros.secoes?.length || filtros.conta) && (
+        <p className="text-xs text-slate-500">Com filtro de categoria ou de linha da DRE, o valor mostrado é só a parte do rateio que entra no filtro.</p>
       )}
 
       <Cartao className="overflow-x-auto">
-        <CabecalhoCartao titulo={`Lançamentos · ${formatarPeriodo(inicio, fim)}`} contagem={lancamentos.length}>
-          {lancamentos.length > 0 && (
-            <span className="text-xs text-slate-500">
-              {temFiltro || filtro ? "Total da seleção" : "Total"}, sem cancelados:{" "}
-              <span className={cx("font-semibold tabular-nums", totalSelecao < 0 ? "text-red-700" : "text-slate-900")}>{moeda(totalSelecao)}</span>
-            </span>
-          )}
+        <CabecalhoCartao titulo={`Lançamentos · ${textoPeriodo(inicio, fim)}`} contagem={lancamentos.length}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {lancamentos.length > 0 && (
+              <span className="text-xs text-slate-500">
+                {temFiltro || filtro ? "Total da seleção" : "Total"}, sem cancelados:{" "}
+                <span className={cx("font-semibold tabular-nums", totalSelecao < 0 ? "text-red-700" : "text-slate-900")}>{moeda(totalSelecao)}</span>
+              </span>
+            )}
+            <label className="flex items-center gap-1.5 text-xs text-slate-500">
+              Ordem
+              <SelectAuto form="filtros-lancamentos" name="ordem" defaultValue={ordem} className={cx(classeFiltro, "py-1 text-xs")}>
+                {Object.entries(ORDENS).map(([v, r]) => (
+                  <option key={v} value={v}>
+                    {r}
+                  </option>
+                ))}
+              </SelectAuto>
+            </label>
+          </div>
         </CabecalhoCartao>
         {lancamentos.length === 0 ? (
           <Vazio icone={<ReceiptText />}>Nenhum lançamento {temFiltro || filtro ? "com esses filtros " : ""}neste período.</Vazio>

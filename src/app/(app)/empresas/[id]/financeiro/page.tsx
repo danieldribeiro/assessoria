@@ -8,6 +8,7 @@ import { AbaExtratos } from "./extratos";
 import { AbaFluxo } from "./fluxo";
 import { AbaFornecedores } from "./fornecedores";
 import { ORDENS, type Ordem } from "@/lib/financeiro/painel";
+import { lerPeriodo } from "@/lib/financeiro/periodo";
 import { AbaLancamentos } from "./lancamentos";
 import { AbaPainel, lerFiltros } from "./painel";
 import { AbaPlanoContas } from "./plano-contas";
@@ -30,16 +31,12 @@ export async function generateMetadata({ params }: PageProps<"/empresas/[id]/fin
   return { title: `Financeiro · ${empresa.nome}` };
 }
 
-const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
-
 export default async function PaginaFinanceiro({ params, searchParams }: PageProps<"/empresas/[id]/financeiro">) {
   const { id } = await params;
   const busca = await searchParams;
   const valor = (k: string) => (typeof busca[k] === "string" ? (busca[k] as string) : undefined);
-  const mesAtual = hoje().slice(0, 7);
-  let de = MES.test(valor("de") ?? "") ? valor("de")! : mesAtual;
-  let ate = MES.test(valor("ate") ?? "") ? valor("ate")! : de;
-  if (ate < de) [de, ate] = [ate, de];
+  const periodo = lerPeriodo(valor("de"), valor("ate"), hoje());
+  const { de, ate } = periodo;
   const base = valor("base") === "previsto" ? "previsto" : "realizado";
 
   const dados = await carregarBaseFinanceira(id);
@@ -47,7 +44,6 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
   // Abas das migrations 0009 e 0010 só aparecem depois de aplicadas.
   const abas = ABAS.filter((a) => !a.recurso || dados.recursos[a.recurso]);
   const aba = abas.some((a) => a.aba === valor("aba")) ? valor("aba")! : "painel";
-  const periodo = { de, ate };
   const filtros = lerFiltros(valor, dados.contas, dados.caixas, dados.contrapartes);
   const ordem = (valor("ordem") ?? "") in ORDENS ? (valor("ordem") as Ordem) : "recentes";
 
