@@ -1,11 +1,13 @@
 import { ArrowLeftRight, CircleCheck, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { CabecalhoCartao, Cartao, Vazio, cx, classeTabela as t } from "@/components/ui";
-import { formatarData, formatarPeriodo, formatarValor } from "@/lib/datas";
+import { formatarData, formatarValor } from "@/lib/datas";
 import { carregarMovimentos, carregarSaldos, carregarTransferencias } from "@/lib/financeiro/consultas";
 import { NOME_ATIVIDADE, type ContaCaixa, type ContaPlano } from "@/lib/financeiro/dominio";
-import { conferirSaldos, diaAnterior, mesesEntre, montarFluxo, ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
-import { FiltroPeriodo, classeFiltro } from "./filtro";
+import { conferirSaldos, diaAnterior, montarFluxo } from "@/lib/financeiro/fluxo";
+import { textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
+import { FiltroPeriodo } from "./filtro";
+import { Alternador } from "./filtros-ui";
 
 const moeda = (v: number) => formatarValor(v, "R$")!;
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -21,12 +23,10 @@ export async function AbaFluxo({
   empresa: { id: string };
   contas: ContaPlano[];
   caixas: ContaCaixa[];
-  periodo: { de: string; ate: string };
+  periodo: Periodo;
   base: "realizado" | "previsto";
 }) {
-  const meses = mesesEntre(periodo.de, periodo.ate);
-  const inicio = meses[0];
-  const fim = ultimoDiaDoMes(meses[meses.length - 1]);
+  const { meses, inicio, fim } = periodo;
   const [movimentos, saldosAntes, saldosFim, transferencias] = await Promise.all([
     carregarMovimentos(empresa.id, inicio, fim, base),
     carregarSaldos(empresa.id, diaAnterior(inicio)),
@@ -47,15 +47,21 @@ export async function AbaFluxo({
 
   return (
     <div className="space-y-6">
-      <FiltroPeriodo aba="fluxo" de={periodo.de} ate={periodo.ate}>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Base</span>
-          <select name="base" defaultValue={base} className={classeFiltro}>
-            <option value="realizado">Realizado (pela data do pagamento)</option>
-            <option value="previsto">Previsto (pelo vencimento)</option>
-          </select>
-        </label>
-      </FiltroPeriodo>
+      <FiltroPeriodo
+        aba="fluxo"
+        periodo={periodo}
+        principal={
+          <Alternador
+            nome="base"
+            rotulo="Base"
+            valor={base}
+            opcoes={[
+              { valor: "realizado", rotulo: "Realizado" },
+              { valor: "previsto", rotulo: "Previsto" },
+            ]}
+          />
+        }
+      />
 
       {caixas.length === 0 || contas.length === 0 ? (
         <Cartao>
@@ -112,7 +118,7 @@ export async function AbaFluxo({
           )}
 
           <Cartao className="overflow-x-auto">
-            <CabecalhoCartao titulo={`Fluxo de caixa ${base === "realizado" ? "realizado" : "previsto"} · ${formatarPeriodo(inicio, fim)}`} />
+            <CabecalhoCartao titulo={`Fluxo de caixa ${base === "realizado" ? "realizado" : "previsto"} · ${textoPeriodo(inicio, fim)}`} />
             <table className={t.tabela}>
               <thead className={t.cabeca}>
                 <tr>
