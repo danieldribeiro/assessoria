@@ -1,10 +1,18 @@
-import { ArrowLeftRight, CircleCheck, CreditCard, Landmark, Pencil, Plus, ReceiptText } from "lucide-react";
+import { ArrowLeftRight, ChevronRight, CircleCheck, CreditCard, Landmark, Pencil, Plus, ReceiptText } from "lucide-react";
 import { BotaoAcao } from "@/components/controles";
-import { PainelLateral } from "@/components/painel-lateral";
+import { PainelLateral, PainelLeitura } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t, type Tom } from "@/components/ui";
+import Link from "next/link";
 import { formatarData, formatarMes, formatarValor } from "@/lib/datas";
-import { carregarConciliados, carregarLancamentos, carregarTransferencias, type BaseFinanceira } from "@/lib/financeiro/consultas";
-import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Contraparte, type Lancamento, type SituacaoLancamento } from "@/lib/financeiro/dominio";
+import {
+  carregarConciliados,
+  carregarFaturasConciliadas,
+  carregarFaturasPorId,
+  carregarLancamentos,
+  carregarTransferencias,
+  type BaseFinanceira,
+} from "@/lib/financeiro/consultas";
+import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Contraparte, type Fatura, type Lancamento, type SituacaoLancamento } from "@/lib/financeiro/dominio";
 import { ORDENS, filtrarLancamentos, ordenar, type Filtros, type Ordem } from "@/lib/financeiro/painel";
 import { cancelarCompra, cancelarLancamento, cancelarTransferencia, editarLancamento, lancar, lancarNoCartao, liquidarLancamento, transferir } from "@/server/financeiro";
 import { CamposCompraCartao, CamposLancamento, CamposLiquidacao, CamposTransferencia } from "./campos";
@@ -67,6 +75,31 @@ export async function AbaLancamentos({
     ...(criterio === "competencia" ? [{ chaves: ["data"], rotulo: "Pela competência" }] : []),
   ];
   const conciliados = recursos.extratos ? await carregarConciliados(empresa.id, lancamentos.map((l) => l.id)) : new Set<string>();
+
+  // Pela data de pagamento ou vencimento, as compras no cartão ficam juntas: uma linha por fatura, como o banco
+  // mostra, e as compras aparecem ao clicar. Pela competência, cada compra fica no mês em que foi feita.
+  type Linha = { tipo: "lancamento"; l: Lancamento } | { tipo: "fatura"; id: string; compras: Lancamento[] };
+  const linhas: Linha[] = [];
+  const grupos = new Map<string, Lancamento[]>();
+  for (const l of lancamentos) {
+    if (criterio === "movimento" && recursos.cartoes && l.fatura_id) {
+      let g = grupos.get(l.fatura_id);
+      if (!g) {
+        g = [];
+        grupos.set(l.fatura_id, g);
+        linhas.push({ tipo: "fatura", id: l.fatura_id, compras: g });
+      }
+      g.push(l);
+    } else linhas.push({ tipo: "lancamento", l });
+  }
+  const [faturas, faturasConciliadas] = grupos.size
+    ? await Promise.all([
+        carregarFaturasPorId(empresa.id, [...grupos.keys()]),
+        recursos.extratos ? carregarFaturasConciliadas(empresa.id) : Promise.resolve(new Set<string>()),
+      ])
+    : [[], new Set<string>()];
+  const porFatura = new Map(faturas.map((f) => [f.id, f]));
+  const nomeCartao = new Map(cartoes.map((c) => [c.id, c.nome]));
   const nomeContraparte = new Map(contrapartes.map((c) => [c.id, c.nome]));
   // Sem a migration 0009, os campos de fornecedor e observações ficam fora do formulário.
   const opcoesContraparte = (atual?: string | null) =>
@@ -203,7 +236,7 @@ export async function AbaLancamentos({
       )}
 
       <Cartao className="overflow-x-auto">
-        <CabecalhoCartao titulo={`Lançamentos · ${textoPeriodo(inicio, fim)}`} contagem={lancamentos.length}>
+        <CabecalhoCartao titulo={`Lançamentos · ${textoPeriodo(inicio, fim)}`} contagem={linhas.length}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {lancamentos.length > 0 && (
               <span className="text-xs text-slate-500">
@@ -240,7 +273,90 @@ export async function AbaLancamentos({
               </tr>
             </thead>
             <tbody>
-              {lancamentos.map((l) => {
+              {linhas.map((x) => {
+                if (x.tipo === "fatura") {
+                  const f = porFatura.get(x.id);
+                  const ativas = x.compras.filter((c) => c.situacao !== "cancelado");
+                  const total = ativas.reduce((a, c) => a + Math.round((selecao.get(c.id)?.valorSelecao ?? 0) * 100), 0) / 100;
+                  const paga = f?.situacao === "paga";
+                  const s = SITUACOES[paga ? "realizado" : "previsto"];
+                  const titulo = f ? `Fatura ${nomeCartao.get(f.cartao_id) ?? "do cartão"} · ${formatarMes(f.referencia)}` : "Fatura do cartão";
+                  const mes = (f?.data_vencimento ?? x.compras[0].data_vencimento ?? "").slice(0, 7);
+                  const porConta = new Map<string, number>();
+                  for (const c of ativas)
+                    for (const r of c.rateios)
+                      porConta.set(r.conta_id, (porConta.get(r.conta_id) ?? 0) + (c.direcao === "saida" ? 1 : -1) * Math.round(r.valor * 100));
+                  const categorias = [...porConta.entries()].filter(([, v]) => v !== 0).sort((a, b) => b[1] - a[1]);
+                  return (
+                    <tr key={x.id} className={t.linha}>
+                      <td className={`${t.td} whitespace-nowrap`}>
+                        {formatarData(paga ? f?.data_pagamento : (f?.data_vencimento ?? x.compras[0].data_vencimento))}
+                        {!paga && <span className="block text-xs text-slate-500">vencimento</span>}
+                      </td>
+                      <td className={t.td}>
+                        <PainelLeitura
+                          titulo={titulo}
+                          classeGatilho="group text-left"
+                          gatilho={
+                            <>
+                              <span className="flex items-center gap-1.5 font-medium text-slate-900 group-hover:text-marca-700">
+                                <CreditCard className="size-4 text-slate-400" />
+                                {titulo}
+                                <ChevronRight className="size-3.5 text-slate-400" />
+                              </span>
+                              <span className="block text-xs text-slate-500">
+                                {ativas.length} {ativas.length === 1 ? "compra" : "compras"} · ver detalhes
+                              </span>
+                            </>
+                          }
+                          rodape={
+                            f && (
+                              <Link
+                                href={`?${new URLSearchParams({ aba: "cartoes", de: mes, ate: mes, cartao: f.cartao_id })}`}
+                                className="text-sm font-medium text-marca-700 hover:underline"
+                              >
+                                Abrir na aba Cartões
+                              </Link>
+                            )
+                          }
+                        >
+                          <DetalheFatura
+                            fatura={f}
+                            compras={x.compras}
+                            categorias={categorias.map(([id, v]) => ({ nome: porId.get(id)?.nome ?? "conta", valor: v / 100 }))}
+                            porId={porId}
+                            nomeContraparte={nomeContraparte}
+                            parcial={temFiltro || !!filtro}
+                          />
+                        </PainelLeitura>
+                        <span className="mt-0.5 block text-xs text-slate-500">
+                          {categorias.slice(0, 3).map(([id, v], i) => (
+                            <span key={id} className="whitespace-nowrap">
+                              {i > 0 && " · "}
+                              {porId.get(id)?.nome ?? "conta"} {moeda(v / 100)}
+                            </span>
+                          ))}
+                          {categorias.length > 3 && ` · e mais ${categorias.length - 3}`}
+                        </span>
+                      </td>
+                      <td className={`${t.td} hidden text-slate-600 md:table-cell`}>{nomeCaixa.get(x.compras[0].conta_caixa_id)}</td>
+                      <td className={t.td}>
+                        <Etiqueta tom={s.tom}>{s.rotulo}</Etiqueta>
+                        {faturasConciliadas.has(x.id) && (
+                          <span className="mt-1 flex items-center gap-1 text-xs text-slate-500" title="Ligada ao pagamento no extrato do banco">
+                            <Landmark className="size-3.5" />
+                            conciliada
+                          </span>
+                        )}
+                      </td>
+                      <td className={cx(t.td, "whitespace-nowrap text-right font-medium tabular-nums", total > 0 ? "text-emerald-700" : "text-red-700")}>
+                        {moeda(total)}
+                      </td>
+                      <td className={`${t.td} whitespace-nowrap text-right`} />
+                    </tr>
+                  );
+                }
+                const l = x.l;
                 const s = SITUACOES[l.situacao];
                 const sinal = l.direcao === "entrada" ? 1 : -1;
                 return (
@@ -422,5 +538,71 @@ export async function AbaLancamentos({
         )}
       </Cartao>
     </div>
+  );
+}
+
+// Compras de uma fatura, para ler: quando foi cada compra, em que categoria e de que fornecedor.
+function DetalheFatura({
+  fatura: f,
+  compras,
+  categorias,
+  porId,
+  nomeContraparte,
+  parcial,
+}: {
+  fatura?: Fatura;
+  compras: Lancamento[];
+  categorias: { nome: string; valor: number }[];
+  porId: Map<string, ContaPlano>;
+  nomeContraparte: Map<string, string>;
+  parcial: boolean;
+}) {
+  return (
+    <>
+      {f && (
+        <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          Fecha {formatarData(f.data_fechamento)} · vence {formatarData(f.data_vencimento)}
+          {f.situacao === "paga" ? ` · paga em ${formatarData(f.data_pagamento)}, ${moeda(f.valor_pago!)}` : " · ainda não paga"}
+        </p>
+      )}
+      {parcial && <p className="text-xs text-amber-700">Com os filtros em uso, só aparecem as compras (ou a parte delas) que entram no filtro.</p>}
+      {categorias.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-slate-500">Por categoria</p>
+          <ul className="space-y-0.5 text-sm">
+            {categorias.map((c, i) => (
+              <li key={i} className="flex justify-between gap-3">
+                <span className="text-slate-700">{c.nome}</span>
+                <span className="tabular-nums text-slate-900">{moeda(Math.abs(c.valor))}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div>
+        <p className="mb-1 text-xs font-medium text-slate-500">Compras</p>
+        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          {compras.map((c) => (
+            <li key={c.id} className={cx("flex justify-between gap-3 px-3 py-2 text-sm", c.situacao === "cancelado" && "text-slate-400")}>
+              <span className="min-w-0">
+                <span className={cx("block font-medium", c.situacao === "cancelado" ? "line-through" : "text-slate-900")}>{c.descricao}</span>
+                <span className="block text-xs text-slate-500">
+                  {formatarData(c.data_competencia)}
+                  {(c.parcelas ?? 1) > 1 && ` · parcela ${c.parcela} de ${c.parcelas}`}
+                  {c.contraparte_id && ` · ${nomeContraparte.get(c.contraparte_id) ?? ""}`}
+                  {c.situacao === "cancelado" && " · cancelada"}
+                </span>
+                <span className="block text-xs text-slate-500">
+                  {c.rateios.map((r) => porId.get(r.conta_id)?.nome ?? "conta").join(" · ")}
+                </span>
+              </span>
+              <span className={cx("whitespace-nowrap tabular-nums", c.direcao === "entrada" && c.situacao !== "cancelado" ? "text-emerald-700" : "")}>
+                {moeda((c.direcao === "entrada" ? 1 : -1) * c.valor_total)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
   );
 }
