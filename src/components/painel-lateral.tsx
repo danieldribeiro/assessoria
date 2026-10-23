@@ -102,3 +102,53 @@ export function PainelLateral({
     </>
   );
 }
+
+// Mesmo painel à direita, só para ler (sem formulário): detalhes que abrem ao clicar numa linha.
+export function PainelLeitura({
+  titulo,
+  gatilho,
+  classeGatilho,
+  rodape,
+  children,
+}: {
+  titulo: string;
+  gatilho: ReactNode;
+  classeGatilho?: string;
+  rodape?: ReactNode;
+  children: ReactNode;
+}) {
+  const dialogo = useRef<HTMLDialogElement>(null);
+  return (
+    <>
+      <button type="button" onClick={() => dialogo.current?.showModal()} className={classeGatilho}>
+        {gatilho}
+      </button>
+      <dialog
+        ref={dialogo}
+        className="m-0 ml-auto h-dvh max-h-dvh w-full max-w-lg whitespace-normal bg-superficie p-0 text-left shadow-xl"
+        onClick={(e) => e.target === dialogo.current && dialogo.current?.close()}
+      >
+        <div className="flex h-full flex-col">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <h2 className="text-base font-semibold text-slate-900">{titulo}</h2>
+            <button
+              type="button"
+              onClick={() => dialogo.current?.close()}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Fechar"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">{children}</div>
+          <div className="flex items-center justify-between gap-2 border-t border-slate-200 px-5 py-3">
+            {rodape ?? <span />}
+            <Botao type="button" variante="secundario" onClick={() => dialogo.current?.close()}>
+              Fechar
+            </Botao>
+          </div>
+        </div>
+      </dialog>
+    </>
+  );
+}

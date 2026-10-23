@@ -77,6 +77,14 @@ export async function carregarFaturas(empresaId: string, inicio: string, fim: st
   return faturas.map((f) => ({ ...f, compras: compras.filter((c) => c.fatura_id === f.id) }));
 }
 
+export async function carregarFaturasPorId(empresaId: string, ids: string[]) {
+  if (!ids.length) return [];
+  const supabase = await criarCliente();
+  const { data, error } = await supabase.from("fin_faturas").select("*").eq("empresa_id", empresaId).in("id", ids);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((f) => ({ ...f, valor_pago: f.valor_pago === null ? null : Number(f.valor_pago) })) as Fatura[];
+}
+
 export async function carregarComprasDasFaturas(empresaId: string, faturas: string[]) {
   if (!faturas.length) return [];
   const supabase = await criarCliente();
