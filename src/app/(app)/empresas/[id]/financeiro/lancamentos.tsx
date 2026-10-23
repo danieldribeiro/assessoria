@@ -2,7 +2,7 @@ import { ArrowLeftRight, CircleCheck, Landmark, Pencil, Plus, ReceiptText } from
 import { BotaoAcao } from "@/components/controles";
 import { PainelLateral } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t, type Tom } from "@/components/ui";
-import { formatarData, formatarValor } from "@/lib/datas";
+import { formatarData, formatarMes, formatarValor } from "@/lib/datas";
 import { carregarConciliados, carregarLancamentos, carregarTransferencias, type BaseFinanceira } from "@/lib/financeiro/consultas";
 import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Contraparte, type Lancamento, type SituacaoLancamento } from "@/lib/financeiro/dominio";
 import { ORDENS, filtrarLancamentos, ordenar, type Filtros, type Ordem } from "@/lib/financeiro/painel";
@@ -228,7 +228,7 @@ export async function AbaLancamentos({
                       {l.situacao === "previsto" && <span className="block text-xs text-slate-500">vencimento</span>}
                       {(criterio === "competencia" ||
                         l.data_competencia.slice(0, 7) !== (l.data_liquidacao ?? l.data_vencimento ?? "").slice(0, 7)) && (
-                        <span className="block text-xs text-slate-500">competência {formatarData(l.data_competencia)}</span>
+                        <span className="block text-xs text-slate-500">competência {formatarMes(l.data_competencia)}</span>
                       )}
                     </td>
                     <td className={t.td}>

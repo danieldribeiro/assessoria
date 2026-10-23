@@ -50,6 +50,12 @@ export function formatarData(iso: string | null | undefined) {
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
+// "2026-10-15" → "out/26".
+export function formatarMes(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return `${MESES[Number(iso.slice(5, 7)) - 1]}/${iso.slice(2, 4)}`;
+}
+
 export function formatarPeriodo(inicio: string, fim: string) {
   const [ai, mi] = inicio.split("-").map(Number);
   const [af, mf] = fim.split("-").map(Number);

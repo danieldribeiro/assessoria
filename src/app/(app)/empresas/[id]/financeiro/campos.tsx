@@ -27,6 +27,34 @@ import { lerNumeroBR } from "@/lib/numeros";
 
 type Opcao = { valor: string; rotulo: string };
 
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+// Competência por mês e ano. O banco guarda uma data: vai o dia 1 do mês escolhido, mas, se o mês
+// não mudou na edição, a data que já estava fica como está.
+function CampoCompetencia({ original }: { original?: string }) {
+  const [mes, setMes] = useState(original?.slice(0, 7) ?? "");
+  const anoAtual = Number(hoje().slice(0, 4));
+  // Do fim do ano que vem até três anos atrás, mais recente primeiro; o mês já gravado entra mesmo fora disso.
+  const meses = Array.from({ length: 60 }, (_, i) => {
+    const total = (anoAtual + 1) * 12 + 11 - i;
+    return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+  });
+  if (mes && !meses.includes(mes)) meses.push(mes);
+  const valor = !mes ? "" : original?.startsWith(mes) ? original : `${mes}-01`;
+  return (
+    <>
+      <input type="hidden" name="data_competencia" value={valor} />
+      <Selecao
+        aria-label="Mês da competência"
+        value={mes}
+        onChange={(e) => setMes(e.target.value)}
+        vazio="—"
+        opcoes={meses.map((m) => ({ valor: m, rotulo: `${MESES[Number(m.slice(5)) - 1]} ${m.slice(0, 4)}` }))}
+      />
+    </>
+  );
+}
+
 const DICA_MOEDA = "Digite só os números: os centavos entram sozinhos.";
 
 // Conta do plano. A classificação define a natureza e a seção da DRE (matriz de coerência);
@@ -285,8 +313,8 @@ export function CamposLancamento({
           <Entrada name="descricao" required defaultValue={fixo.descricao} />
         </Campo>
         <div className="grid grid-cols-2 gap-3">
-          <Campo rotulo="Competência" dica="Dia ou mês a que se refere. Vazio = data do banco">
-            <Entrada name="data_competencia" type="date" />
+          <Campo rotulo="Competência" dica="Mês a que se refere. Vazio = mês da data do banco">
+            <CampoCompetencia />
           </Campo>
           <Campo rotulo="Documento" dica="Nota, boleto, recibo (opcional)">
             <Entrada name="documento" defaultValue={fixo.documento ?? ""} />
@@ -331,8 +359,8 @@ export function CamposLancamento({
             defaultValue={(l0?.situacao === "previsto" ? l0.data_vencimento : l0?.data_liquidacao) ?? hoje()}
           />
         </Campo>
-        <Campo rotulo="Competência" dica="Dia ou mês a que se refere. Vazio = mesma data">
-          <Entrada name="data_competencia" type="date" defaultValue={l0?.data_competencia} />
+        <Campo rotulo="Competência" dica="Mês a que se refere. Vazio = mês da data ao lado">
+          <CampoCompetencia original={l0?.data_competencia} />
         </Campo>
       </div>
       <Campo rotulo="Descrição">

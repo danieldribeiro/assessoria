@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { GraficoMensal } from "@/components/graficos";
 import { CabecalhoCartao, Cartao, Vazio, classeBotao, cx, classeTabela as t } from "@/components/ui";
-import { formatarData, formatarValor } from "@/lib/datas";
+import { formatarData, formatarMes, formatarValor } from "@/lib/datas";
 import { carregarLancamentos, carregarSaldos } from "@/lib/financeiro/consultas";
 import { compararCodigo, type ContaCaixa, type ContaPlano, type Contraparte, type Direcao } from "@/lib/financeiro/dominio";
 import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
@@ -338,7 +338,7 @@ export async function AbaPainel({
                             <span className="min-w-0">
                               <span className="block truncate text-slate-900">{m.lancamento.descricao}</span>
                               <span className="block text-xs text-slate-500">
-                                {formatarData(base === "caixa" ? m.lancamento.data_liquidacao : m.lancamento.data_competencia)}
+                                {base === "caixa" ? formatarData(m.lancamento.data_liquidacao) : `competência ${formatarMes(m.lancamento.data_competencia)}`}
                                 {m.lancamento.situacao === "previsto" && " · previsto"}
                               </span>
                             </span>
