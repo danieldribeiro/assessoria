@@ -134,7 +134,9 @@ export function BotaoAcao({
         if (pergunta && !confirm(pergunta)) return;
         iniciar(async () => {
           try {
-            await acao();
+            const r = await acao();
+            // Ação que devolve { erro } (regra do banco recusou): mostra o motivo em vez do aviso de sucesso.
+            if (r && typeof r === "object" && "erro" in r && typeof r.erro === "string") return avisar(r.erro, "erro");
             if (aviso) avisar(aviso);
           } catch (e) {
             unstable_rethrow(e);

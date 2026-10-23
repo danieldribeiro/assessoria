@@ -24,6 +24,10 @@ const MENSAGENS: Record<string, string> = {
   fin_movimentos_transferencia_unica: "Essa transferência já está conciliada com outra movimentação desta conta.",
   fin_movimentos_situacao_coerente: "Informe o motivo para ignorar a movimentação.",
   fin_extratos_sha256_valido: "Não foi possível conferir o arquivo. Selecione-o de novo.",
+  fin_cartoes_nome_unico: "Já existe um cartão com esse nome.",
+  fin_cartoes_dias_validos: "Os dias de fechamento e de vencimento vão de 1 a 31.",
+  fin_movimentos_fatura_unica: "Essa fatura já está conciliada com outra movimentação do extrato.",
+  fin_faturas_datas: "O fechamento precisa ser antes do vencimento (ou no mesmo dia).",
 };
 
 function falhaFinanceira(error: { message: string } | null) {
@@ -430,6 +434,7 @@ export async function conciliarComFormulario(movimentoId: string, dados: FormDat
   if (!escolha) return { erro: "Escolha o lançamento ou a transferência." };
   const [tipo, id] = escolha.split(":");
   if (tipo === "lancamento") return conciliar(movimentoId, id);
+  if (tipo === "fatura") return conciliarFatura(movimentoId, id);
   if (tipo !== "transferencia") return { erro: "Escolha o lançamento ou a transferência." };
   const supabase = await criarCliente();
   const { error } = await supabase
@@ -477,13 +482,139 @@ export async function ignorarMovimento(movimentoId: string, dados: FormData) {
 }
 
 // Volta a movimentação para pendente. O lançamento continua existindo (se foi criado pelo extrato, cancele-o à parte).
-export async function desfazerConciliacao(movimentoId: string) {
+// `comFatura`: a migration 0011 já está aplicada (a coluna fatura_id existe). Desfazer a conciliação com uma
+// fatura não desfaz o pagamento dela; isso é feito na aba Cartões.
+export async function desfazerConciliacao(movimentoId: string, comFatura = false) {
   const supabase = await criarCliente();
   const { error } = await supabase
     .from("fin_extrato_movimentos")
-    .update({ situacao: "pendente", lancamento_id: null, transferencia_id: null, motivo: null })
+    .update({ situacao: "pendente", lancamento_id: null, transferencia_id: null, motivo: null, ...(comFatura ? { fatura_id: null } : {}) })
     .eq("id", movimentoId)
     .neq("situacao", "pendente");
   exigir(error);
+  atualizarTelas();
+}
+
+// ---------------------------------------------------------------------------
+// Cartões e faturas (0011). Cada compra é um lançamento dentro de uma fatura; pagar a fatura realiza todas as
+// compras na data do pagamento.
+// ---------------------------------------------------------------------------
+
+function dia(dados: FormData, campo: string) {
+  const n = Number(texto(dados, campo));
+  return Number.isInteger(n) && n >= 1 && n <= 31 ? n : null;
+}
+
+export async function salvarCartao(empresaId: string, id: string | null, dados: FormData) {
+  const nome = texto(dados, "nome");
+  const caixa = texto(dados, "conta_caixa_id");
+  const fechamento = dia(dados, "dia_fechamento");
+  const vencimento = dia(dados, "dia_vencimento");
+  if (!nome) return { erro: "Informe o nome do cartão." };
+  if (!caixa) return { erro: "Escolha a conta de caixa que paga a fatura." };
+  if (!fechamento || !vencimento) return { erro: "Informe os dias de fechamento e de vencimento (de 1 a 31)." };
+  const registro = { nome, conta_caixa_id: caixa, dia_fechamento: fechamento, dia_vencimento: vencimento };
+  const supabase = await criarCliente();
+  const { error } = id
+    ? await supabase.from("fin_cartoes").update(registro).eq("id", id).eq("empresa_id", empresaId)
+    : await supabase.from("fin_cartoes").insert({ empresa_id: empresaId, ...registro });
+  if (error) return falhaFinanceira(error);
+  atualizarTelas();
+}
+
+export async function mudarAtivacaoCartao(id: string, ativo: boolean) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.from("fin_cartoes").update({ ativo }).eq("id", id);
+  exigir(error);
+  atualizarTelas();
+}
+
+// Compra (ou estorno) no cartão. Parcelada, vira uma parcela por fatura; todas com a competência da compra.
+export async function lancarNoCartao(dados: FormData) {
+  const cartao = texto(dados, "cartao_id");
+  const direcao = texto(dados, "direcao") ?? "saida";
+  const quando = data(dados, "data_compra");
+  const descricao = texto(dados, "descricao");
+  const parcelas = Number(texto(dados, "parcelas") ?? 1);
+  const primeira = texto(dados, "primeira_fatura");
+  if (!cartao) return { erro: "Escolha o cartão." };
+  if (direcao !== "entrada" && direcao !== "saida") return { erro: "Escolha compra ou estorno." };
+  if (!quando) return { erro: "Informe a data da compra." };
+  if (!descricao) return { erro: "Informe a descrição." };
+  if (!Number.isInteger(parcelas) || parcelas < 1 || parcelas > 48) return { erro: "Parcelas: de 1 a 48." };
+  if (primeira && !/^\d{4}-\d{2}$/.test(primeira)) return { erro: "Escolha a fatura da primeira parcela." };
+
+  const lidos = numeros(dados, { valor_total: "Valor" });
+  if ("erro" in lidos) return { erro: lidos.erro };
+  const total = lidos.valores.valor_total;
+  if (total === null) return { erro: "Informe o valor." };
+  const totalCentavos = emCentavos(total);
+  if (totalCentavos === null) return { erro: "O valor tem no máximo duas casas decimais." };
+  if (totalCentavos <= 0) return { erro: "O valor precisa ser maior que zero." };
+  if (totalCentavos < parcelas) return { erro: "O valor é pequeno demais para tantas parcelas." };
+  const rateio = lerRateio(dados, totalCentavos);
+  if ("erro" in rateio) return { erro: rateio.erro };
+
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_lancar_no_cartao", {
+    p_cartao: cartao,
+    p_direcao: direcao,
+    p_valor_total: totalCentavos / 100,
+    p_data_compra: quando,
+    p_parcelas: parcelas,
+    p_primeira_fatura: primeira ? `${primeira}-01` : null,
+    p_descricao: descricao,
+    p_documento: texto(dados, "documento"),
+    p_rateios: rateio.linhas,
+    p_contraparte: texto(dados, "contraparte_id"),
+    p_observacoes: texto(dados, "observacoes"),
+  });
+  if (error) return falhaFinanceira(error);
+  atualizarTelas();
+}
+
+export async function pagarFatura(faturaId: string, dados: FormData) {
+  const quando = data(dados, "data_pagamento");
+  if (!quando) return { erro: "Informe a data do pagamento." };
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_pagar_fatura", { p_fatura: faturaId, p_data: quando });
+  if (error) return falhaFinanceira(error);
+  atualizarTelas();
+}
+
+export async function desfazerPagamentoFatura(faturaId: string) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_desfazer_pagamento_fatura", { p_fatura: faturaId });
+  if (error) return falhaFinanceira(error);
+  atualizarTelas();
+}
+
+export async function ajustarFatura(faturaId: string, dados: FormData) {
+  const fechamento = data(dados, "data_fechamento");
+  const vencimento = data(dados, "data_vencimento");
+  if (!fechamento || !vencimento) return { erro: "Informe o fechamento e o vencimento." };
+  if (fechamento > vencimento) return { erro: "O fechamento precisa ser antes do vencimento (ou no mesmo dia)." };
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_ajustar_fatura", { p_fatura: faturaId, p_fechamento: fechamento, p_vencimento: vencimento });
+  if (error) return falhaFinanceira(error);
+  atualizarTelas();
+}
+
+// Cancela todas as parcelas da compra que estão em faturas abertas. As de faturas pagas ficam (o banco recusa).
+export async function cancelarCompra(compraId: string) {
+  const supabase = await criarCliente();
+  const { error } = await supabase
+    .from("fin_lancamentos")
+    .update({ situacao: "cancelado", cancelado_em: new Date().toISOString() })
+    .eq("compra_id", compraId)
+    .eq("situacao", "previsto");
+  if (error) return falhaFinanceira(error);
+  atualizarTelas();
+}
+
+export async function conciliarFatura(movimentoId: string, faturaId: string) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_conciliar_fatura", { p_movimento: movimentoId, p_fatura: faturaId });
+  if (error) return falhaFinanceira(error);
   atualizarTelas();
 }

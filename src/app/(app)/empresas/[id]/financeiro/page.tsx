@@ -1,8 +1,9 @@
-import { ArrowLeftRight, ChevronRight, FileText, Landmark, LayoutDashboard, ListTree, ReceiptText, Scale, Store, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, ChevronRight, CreditCard, FileText, Landmark, LayoutDashboard, ListTree, ReceiptText, Scale, Store, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { cx } from "@/components/ui";
 import { hoje } from "@/lib/datas";
 import { carregarBaseFinanceira } from "@/lib/financeiro/consultas";
+import { AbaCartoes } from "./cartoes";
 import { AbaContasCaixa } from "./contas-caixa";
 import { AbaExtratos } from "./extratos";
 import { AbaFluxo } from "./fluxo";
@@ -14,11 +15,12 @@ import { AbaPainel, lerFiltros } from "./painel";
 import { AbaPlanoContas } from "./plano-contas";
 import { AbaResultado } from "./resultado";
 
-const ABAS: { aba: string; nome: string; icone: LucideIcon; recurso?: "fornecedores" | "extratos" }[] = [
+const ABAS: { aba: string; nome: string; icone: LucideIcon; recurso?: "fornecedores" | "extratos" | "cartoes" }[] = [
   { aba: "painel", nome: "Painel", icone: LayoutDashboard },
   { aba: "resultado", nome: "Resultado", icone: Scale },
   { aba: "fluxo", nome: "Fluxo de caixa", icone: ArrowLeftRight },
   { aba: "lancamentos", nome: "Lançamentos", icone: ReceiptText },
+  { aba: "cartoes", nome: "Cartões", icone: CreditCard, recurso: "cartoes" },
   { aba: "extratos", nome: "Extratos", icone: FileText, recurso: "extratos" },
   { aba: "fornecedores", nome: "Fornecedores", icone: Store, recurso: "fornecedores" },
   { aba: "plano", nome: "Plano de contas", icone: ListTree },
@@ -41,7 +43,7 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
 
   const dados = await carregarBaseFinanceira(id);
   const { empresa } = dados;
-  // Abas das migrations 0009 e 0010 só aparecem depois de aplicadas.
+  // Abas das migrations 0009, 0010 e 0011 só aparecem depois de aplicadas.
   const abas = ABAS.filter((a) => !a.recurso || dados.recursos[a.recurso]);
   const aba = abas.some((a) => a.aba === valor("aba")) ? valor("aba")! : "painel";
   const filtros = lerFiltros(valor, dados.contas, dados.caixas, dados.contrapartes);
@@ -99,6 +101,9 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
           filtros={filtros}
           ordem={ordem}
         />
+      )}
+      {aba === "cartoes" && (
+        <AbaCartoes {...dados} periodo={periodo} cartao={dados.cartoes.some((c) => c.id === valor("cartao")) ? valor("cartao")! : null} />
       )}
       {aba === "extratos" && (
         <AbaExtratos
