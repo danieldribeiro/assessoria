@@ -1,4 +1,4 @@
-import { ArrowLeftRight, CircleCheck, Landmark, Pencil, Plus, ReceiptText } from "lucide-react";
+import { ArrowLeftRight, CircleCheck, CreditCard, Landmark, Pencil, Plus, ReceiptText } from "lucide-react";
 import { BotaoAcao } from "@/components/controles";
 import { PainelLateral } from "@/components/painel-lateral";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t, type Tom } from "@/components/ui";
@@ -6,8 +6,8 @@ import { formatarData, formatarMes, formatarValor } from "@/lib/datas";
 import { carregarConciliados, carregarLancamentos, carregarTransferencias, type BaseFinanceira } from "@/lib/financeiro/consultas";
 import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Contraparte, type Lancamento, type SituacaoLancamento } from "@/lib/financeiro/dominio";
 import { ORDENS, filtrarLancamentos, ordenar, type Filtros, type Ordem } from "@/lib/financeiro/painel";
-import { cancelarLancamento, cancelarTransferencia, editarLancamento, lancar, liquidarLancamento, transferir } from "@/server/financeiro";
-import { CamposLancamento, CamposLiquidacao, CamposTransferencia } from "./campos";
+import { cancelarCompra, cancelarLancamento, cancelarTransferencia, editarLancamento, lancar, lancarNoCartao, liquidarLancamento, transferir } from "@/server/financeiro";
+import { CamposCompraCartao, CamposLancamento, CamposLiquidacao, CamposTransferencia } from "./campos";
 import { textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
 import { CampoFiltro, FiltroPeriodo, classeFiltro } from "./filtro";
 import { SelectAuto, type FiltroAtivo } from "./filtros-ui";
@@ -25,6 +25,7 @@ export async function AbaLancamentos({
   contas,
   caixas,
   contrapartes,
+  cartoes,
   recursos,
   periodo,
   situacao,
@@ -36,6 +37,7 @@ export async function AbaLancamentos({
   contas: ContaPlano[];
   caixas: ContaCaixa[];
   contrapartes: Contraparte[];
+  cartoes: BaseFinanceira["cartoes"];
   recursos: BaseFinanceira["recursos"];
   periodo: Periodo;
   situacao?: string;
@@ -82,6 +84,9 @@ export async function AbaLancamentos({
     .sort((a, b) => compararCodigo(a.codigo, b.codigo))
     .map((c) => ({ valor: c.id, rotulo: `${c.codigo} · ${c.nome}` }));
   const podeLancar = opcoesCaixa.length > 0 && opcoesConta.length > 0;
+  const opcoesCartao = cartoes
+    .filter((c) => c.ativo)
+    .map((c) => ({ valor: c.id, rotulo: c.nome, dia_fechamento: c.dia_fechamento, dia_vencimento: c.dia_vencimento }));
   // Na edição, a conta de caixa e as contas do rateio atuais continuam na lista mesmo se foram desativadas.
   const opcoesEdicao = (l: Lancamento) => ({
     caixas: caixas
@@ -149,6 +154,23 @@ export async function AbaLancamentos({
                 >
                   <CamposTransferencia caixas={opcoesCaixa} />
                 </PainelLateral>
+                {opcoesCartao.length > 0 && (
+                  <PainelLateral
+                    titulo="Compra no cartão"
+                    gatilho={
+                      <>
+                        <CreditCard />
+                        Compra no cartão
+                      </>
+                    }
+                    classeGatilho={classeBotao("secundario")}
+                    acao={lancarNoCartao}
+                    rotuloSalvar="Lançar compra"
+                    aviso="Compra lançada"
+                  >
+                    <CamposCompraCartao cartoes={opcoesCartao} contas={opcoesConta} contrapartes={opcoesContraparte()} />
+                  </PainelLateral>
+                )}
                 <PainelLateral
                   titulo="Novo lançamento"
                   gatilho={
@@ -249,6 +271,12 @@ export async function AbaLancamentos({
                         })}
                       </span>
                       {l.observacoes && <span className="mt-0.5 block whitespace-pre-line text-xs italic text-slate-500">{l.observacoes}</span>}
+                      {l.fatura_id && (
+                        <span className="mt-1 flex items-center gap-1 text-xs text-slate-500" title="Compra no cartão: a fatura decide a situação e as datas">
+                          <CreditCard className="size-3.5" />
+                          no cartão{(l.parcelas ?? 1) > 1 && ` · parcela ${l.parcela} de ${l.parcelas}`}
+                        </span>
+                      )}
                       {l.juros_nao_segregados && (
                         <Etiqueta tom="ambar" className="mt-1">
                           juros não segregados
@@ -303,10 +331,15 @@ export async function AbaLancamentos({
                               situação não mudam. Para mudar, desfaça a conciliação na aba Extratos.
                             </p>
                           )}
-                          <CamposLancamento {...opcoesEdicao(l)} lancamento={l} contrapartes={opcoesContraparte(l.contraparte_id)} />
+                          <CamposLancamento
+                            {...opcoesEdicao(l)}
+                            lancamento={l}
+                            contrapartes={opcoesContraparte(l.contraparte_id)}
+                            cartao={l.fatura_id ? (l.situacao === "realizado" ? "Compra no cartão, em fatura já paga." : "Compra no cartão, em fatura aberta.") : undefined}
+                          />
                         </PainelLateral>
                       )}
-                      {l.situacao === "previsto" && (
+                      {l.situacao === "previsto" && !l.fatura_id && (
                         <PainelLateral
                           titulo={`Marcar como realizado: ${l.descricao}`}
                           gatilho={
@@ -323,7 +356,17 @@ export async function AbaLancamentos({
                           <CamposLiquidacao />
                         </PainelLateral>
                       )}
-                      {l.situacao !== "cancelado" && !conciliados.has(l.id) && (
+                      {l.fatura_id && l.compra_id && l.situacao === "previsto" && (
+                        <BotaoAcao
+                          acao={cancelarCompra.bind(null, l.compra_id)}
+                          pergunta={`Cancelar a compra no cartão “${l.descricao}”? ${(l.parcelas ?? 1) > 1 ? "Todas as parcelas em faturas ainda não pagas são canceladas. " : ""}Ela sai do Resultado e da fatura, mas continua registrada.`}
+                          aviso="Compra cancelada"
+                          className="rounded-md px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                        >
+                          Cancelar
+                        </BotaoAcao>
+                      )}
+                      {l.situacao !== "cancelado" && !l.fatura_id && !conciliados.has(l.id) && (
                         <BotaoAcao
                           acao={cancelarLancamento.bind(null, l.id)}
                           pergunta={`Cancelar o lançamento “${l.descricao}”? Ele sai do saldo e do fluxo, mas continua registrado. Isso não pode ser desfeito.`}

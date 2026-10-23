@@ -18,10 +18,13 @@ import {
   formatarDocumento,
   type ContaCaixa,
   type ContaPlano,
+  type Cartao,
   type Contraparte,
   type Lancamento,
 } from "@/lib/financeiro/dominio";
+import { referenciaDaCompra } from "@/lib/financeiro/cartao";
 import { emCentavos } from "@/lib/financeiro/rateio";
+import { somarMeses } from "@/lib/financeiro/periodo";
 import { moedaParaCampo } from "@/lib/moeda";
 import { lerNumeroBR } from "@/lib/numeros";
 
@@ -190,35 +193,26 @@ export type MovimentoFixo = { direcao: "entrada" | "saida"; valor: number; data:
 // Lançamento com rateio: cada linha é uma conta do plano; a soma precisa bater com o valor total.
 // Com `lancamento`, o formulário vem preenchido para a edição. Com `contrapartes` (lista, mesmo vazia), mostra os
 // campos de fornecedor ou cliente e observações (migration 0009); sem a lista, eles ficam de fora.
-// Com `fixo`, é o lançamento criado a partir de uma movimentação do extrato.
+// Com `fixo`, é o lançamento criado a partir de uma movimentação do extrato. Com `cartao` (texto sobre a fatura),
+// é a edição de uma compra no cartão: situação, conta de caixa e datas vêm da fatura e não mudam aqui.
 export function CamposLancamento({
   caixas,
   contas,
   lancamento: l0,
   contrapartes,
   fixo,
+  cartao,
 }: {
   caixas: Opcao[];
   contas: Opcao[];
   lancamento?: Lancamento;
   contrapartes?: Opcao[] | null;
   fixo?: MovimentoFixo;
+  cartao?: string;
 }) {
   const [situacao, setSituacao] = useState<string>(l0?.situacao === "previsto" ? "previsto" : "realizado");
   const [total, setTotal] = useState(() => moedaParaCampo(fixo ? fixo.valor : l0?.valor_total));
-  const [linhas, setLinhas] = useState<Linha[]>(() =>
-    l0?.rateios.length
-      ? l0.rateios.map((r, i) => ({ chave: i, conta: r.conta_id, valor: moedaParaCampo(r.valor) }))
-      : [{ chave: 0, conta: "", valor: "" }],
-  );
   const totalC = centavosDe(total);
-  const somaC = linhas.reduce((a, l) => a + (centavosDe(l.valor) ?? 0), 0);
-  const varias = linhas.length > 1;
-  const falta = totalC !== null && varias ? totalC - somaC : null;
-
-  function mudar(chave: number, campo: "conta" | "valor", valor: string) {
-    setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, [campo]: valor } : l)));
-  }
 
   const fornecedor = contrapartes ? (
     <Campo rotulo="Fornecedor ou cliente" dica="Opcional. Despesas de fornecedores diferentes ficam em lançamentos separados.">
@@ -231,60 +225,7 @@ export function CamposLancamento({
     </Campo>
   ) : null;
 
-  const rateio = (
-    <fieldset className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <legend className="px-1 text-sm font-medium text-slate-700">Contas do plano (rateio)</legend>
-      {linhas.map((l, i) => (
-        <div key={l.chave} className="flex items-start gap-2">
-          <Selecao
-            name="rateio_conta"
-            aria-label={`Conta da linha ${i + 1}`}
-            vazio="Escolha a conta…"
-            opcoes={contas}
-            value={l.conta}
-            onChange={(e) => mudar(l.chave, "conta", e.target.value)}
-            className="min-w-0 flex-1"
-          />
-          <EntradaMoeda
-            name="rateio_valor"
-            aria-label={`Valor da linha ${i + 1}`}
-            placeholder={varias ? "0,00" : "= total"}
-            value={l.valor}
-            onChange={(texto) => mudar(l.chave, "valor", texto)}
-            className="w-36"
-          />
-          {varias && (
-            <button
-              type="button"
-              onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))}
-              className="mt-1.5 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-              aria-label={`Tirar a linha ${i + 1}`}
-            >
-              <X className="size-4" />
-            </button>
-          )}
-        </div>
-      ))}
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setLinhas((ls) => [...ls, { chave: Math.max(...ls.map((x) => x.chave)) + 1, conta: "", valor: "" }])}
-          className="inline-flex items-center gap-1 text-xs font-medium text-marca-700 hover:underline"
-        >
-          <Plus className="size-3.5" />
-          Dividir em mais uma conta
-        </button>
-        {falta !== null && (
-          <span className={falta === 0 ? "text-xs text-emerald-700" : "text-xs text-amber-700"}>
-            {falta === 0 ? "Soma confere" : `${falta > 0 ? "Faltam" : "Sobram"} ${formatar(Math.abs(falta))}`}
-          </span>
-        )}
-      </div>
-      <p className="text-xs text-slate-500">
-        Ex.: parcela de empréstimo = amortização + juros. Com uma conta só, o valor da linha é o total.
-      </p>
-    </fieldset>
-  );
+  const rateio = <BlocoRateio contas={contas} totalC={totalC} inicial={l0?.rateios} />;
 
   const juros = (
     <label className="flex items-start gap-2 text-sm text-slate-700">
@@ -338,31 +279,51 @@ export function CamposLancamento({
             opcoes={[{ valor: "saida", rotulo: "Saída (pagamento)" }, { valor: "entrada", rotulo: "Entrada (recebimento)" }]}
           />
         </Campo>
-        <Campo rotulo="Situação">
-          <Selecao
-            name="situacao"
-            value={situacao}
-            onChange={(e) => setSituacao(e.target.value)}
-            opcoes={[{ valor: "realizado", rotulo: "Realizado (já saiu ou entrou)" }, { valor: "previsto", rotulo: "Previsto (a pagar ou receber)" }]}
-          />
-        </Campo>
+        {cartao ? (
+          <Campo rotulo="Competência" dica="Mês da compra: é nele que entra no Resultado">
+            <CampoCompetencia original={l0?.data_competencia} />
+          </Campo>
+        ) : (
+          <Campo rotulo="Situação">
+            <Selecao
+              name="situacao"
+              value={situacao}
+              onChange={(e) => setSituacao(e.target.value)}
+              opcoes={[{ valor: "realizado", rotulo: "Realizado (já saiu ou entrou)" }, { valor: "previsto", rotulo: "Previsto (a pagar ou receber)" }]}
+            />
+          </Campo>
+        )}
       </div>
-      <Campo rotulo="Conta de caixa">
-        <Selecao name="conta_caixa_id" required vazio="Escolha…" opcoes={caixas} defaultValue={l0?.conta_caixa_id} />
-      </Campo>
-      <div className="grid grid-cols-2 gap-3">
-        <Campo rotulo={situacao === "realizado" ? "Data do pagamento ou recebimento" : "Vencimento"}>
-          <Entrada
-            name="data"
-            type="date"
-            required
-            defaultValue={(l0?.situacao === "previsto" ? l0.data_vencimento : l0?.data_liquidacao) ?? hoje()}
-          />
-        </Campo>
-        <Campo rotulo="Competência" dica="Mês a que se refere. Vazio = mês da data ao lado">
-          <CampoCompetencia original={l0?.data_competencia} />
-        </Campo>
-      </div>
+      {cartao && l0 ? (
+        <>
+          <input type="hidden" name="situacao" value={l0.situacao === "realizado" ? "realizado" : "previsto"} />
+          <input type="hidden" name="conta_caixa_id" value={l0.conta_caixa_id} />
+          <input type="hidden" name="data" value={(l0.situacao === "realizado" ? l0.data_liquidacao : l0.data_vencimento) ?? ""} />
+          <p className="rounded-md bg-marca-50 px-3 py-2 text-xs text-marca-800">
+            {cartao} A situação, a conta de caixa e as datas seguem a fatura: mudam pela aba Cartões (Pagar fatura ou
+            Ajustar datas).
+          </p>
+        </>
+      ) : (
+        <>
+          <Campo rotulo="Conta de caixa">
+            <Selecao name="conta_caixa_id" required vazio="Escolha…" opcoes={caixas} defaultValue={l0?.conta_caixa_id} />
+          </Campo>
+          <div className="grid grid-cols-2 gap-3">
+            <Campo rotulo={situacao === "realizado" ? "Data do pagamento ou recebimento" : "Vencimento"}>
+              <Entrada
+                name="data"
+                type="date"
+                required
+                defaultValue={(l0?.situacao === "previsto" ? l0.data_vencimento : l0?.data_liquidacao) ?? hoje()}
+              />
+            </Campo>
+            <Campo rotulo="Competência" dica="Mês a que se refere. Vazio = mês da data ao lado">
+              <CampoCompetencia original={l0?.data_competencia} />
+            </Campo>
+          </div>
+        </>
+      )}
       <Campo rotulo="Descrição">
         <Entrada name="descricao" required placeholder="Aluguel de outubro" defaultValue={l0?.descricao} />
       </Campo>
@@ -379,6 +340,77 @@ export function CamposLancamento({
       {observacoes}
       {juros}
     </>
+  );
+}
+
+// Linhas do rateio: cada uma é uma conta do plano; com mais de uma, mostra quanto falta para fechar o total.
+function BlocoRateio({ contas, totalC, inicial, dica }: { contas: Opcao[]; totalC: number | null; inicial?: { conta_id: string; valor: number }[]; dica?: string }) {
+  const [linhas, setLinhas] = useState<Linha[]>(() =>
+    inicial?.length
+      ? inicial.map((r, i) => ({ chave: i, conta: r.conta_id, valor: moedaParaCampo(r.valor) }))
+      : [{ chave: 0, conta: "", valor: "" }],
+  );
+  const somaC = linhas.reduce((a, l) => a + (centavosDe(l.valor) ?? 0), 0);
+  const varias = linhas.length > 1;
+  const falta = totalC !== null && varias ? totalC - somaC : null;
+
+  function mudar(chave: number, campo: "conta" | "valor", valor: string) {
+    setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, [campo]: valor } : l)));
+  }
+
+  return (
+    <fieldset className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <legend className="px-1 text-sm font-medium text-slate-700">Contas do plano (rateio)</legend>
+      {linhas.map((l, i) => (
+        <div key={l.chave} className="flex items-start gap-2">
+          <Selecao
+            name="rateio_conta"
+            aria-label={`Conta da linha ${i + 1}`}
+            vazio="Escolha a conta…"
+            opcoes={contas}
+            value={l.conta}
+            onChange={(e) => mudar(l.chave, "conta", e.target.value)}
+            className="min-w-0 flex-1"
+          />
+          <EntradaMoeda
+            name="rateio_valor"
+            aria-label={`Valor da linha ${i + 1}`}
+            placeholder={varias ? "0,00" : "= total"}
+            value={l.valor}
+            onChange={(texto) => mudar(l.chave, "valor", texto)}
+            className="w-36"
+          />
+          {varias && (
+            <button
+              type="button"
+              onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))}
+              className="mt-1.5 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+              aria-label={`Tirar a linha ${i + 1}`}
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setLinhas((ls) => [...ls, { chave: Math.max(...ls.map((x) => x.chave)) + 1, conta: "", valor: "" }])}
+          className="inline-flex items-center gap-1 text-xs font-medium text-marca-700 hover:underline"
+        >
+          <Plus className="size-3.5" />
+          Dividir em mais uma conta
+        </button>
+        {falta !== null && (
+          <span className={falta === 0 ? "text-xs text-emerald-700" : "text-xs text-amber-700"}>
+            {falta === 0 ? "Soma confere" : `${falta > 0 ? "Faltam" : "Sobram"} ${formatar(Math.abs(falta))}`}
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-slate-500">
+        {dica ?? "Ex.: parcela de empréstimo = amortização + juros. Com uma conta só, o valor da linha é o total."}
+      </p>
+    </fieldset>
   );
 }
 
@@ -425,6 +457,157 @@ export function CamposTransferencia({ caixas }: { caixas: Opcao[] }) {
       <Campo rotulo="Descrição">
         <Entrada name="descricao" placeholder="Reserva para impostos" />
       </Campo>
+    </>
+  );
+}
+
+// Cartão de crédito (0011): a conta de caixa é a que paga a fatura; os dias decidem em que fatura cada compra cai.
+export function CamposCartao({ cartao, caixas, comFaturas }: { cartao?: Cartao; caixas: Opcao[]; comFaturas?: boolean }) {
+  return (
+    <>
+      <Campo rotulo="Nome">
+        <Entrada name="nome" required defaultValue={cartao?.nome ?? ""} placeholder="Itaú Visa empresa" />
+      </Campo>
+      <Campo rotulo="Conta de caixa que paga a fatura" dica={comFaturas ? "Não muda depois da primeira fatura." : undefined}>
+        <Selecao name="conta_caixa_id" required vazio="Escolha…" opcoes={caixas} defaultValue={cartao?.conta_caixa_id} disabled={comFaturas} />
+        {comFaturas && <input type="hidden" name="conta_caixa_id" value={cartao?.conta_caixa_id} />}
+      </Campo>
+      <div className="grid grid-cols-2 gap-3">
+        <Campo rotulo="Dia do fechamento" dica="Compra neste dia ou depois vai para a fatura seguinte">
+          <Entrada name="dia_fechamento" type="number" min={1} max={31} required defaultValue={cartao?.dia_fechamento ?? ""} />
+        </Campo>
+        <Campo rotulo="Dia do vencimento">
+          <Entrada name="dia_vencimento" type="number" min={1} max={31} required defaultValue={cartao?.dia_vencimento ?? ""} />
+        </Campo>
+      </div>
+      <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        Mudar os dias vale para as faturas que ainda vão ser criadas. Para uma fatura que já existe, use Ajustar datas.
+      </p>
+    </>
+  );
+}
+
+export type OpcaoCartao = Opcao & Pick<Cartao, "dia_fechamento" | "dia_vencimento">;
+
+// Compra no cartão: cada parcela vira um lançamento previsto na fatura do mês, com a competência da compra. A
+// fatura da primeira parcela sai do dia de fechamento, mas pode ser escolhida (compra lançada atrasada, por exemplo).
+export function CamposCompraCartao({ cartoes, contas, contrapartes }: { cartoes: OpcaoCartao[]; contas: Opcao[]; contrapartes?: Opcao[] | null }) {
+  const [cartao, setCartao] = useState(cartoes.length === 1 ? cartoes[0].valor : "");
+  const [dataCompra, setDataCompra] = useState(hoje());
+  const [parcelas, setParcelas] = useState("1");
+  const [primeira, setPrimeira] = useState("");
+  const [direcao, setDirecao] = useState("saida");
+  const [total, setTotal] = useState("");
+  const totalC = centavosDe(total);
+  const escolhido = cartoes.find((c) => c.valor === cartao);
+  const automatica = escolhido && /^\d{4}-\d{2}-\d{2}$/.test(dataCompra) ? referenciaDaCompra(escolhido, dataCompra) : null;
+  const n = direcao === "entrada" ? 1 : Math.max(1, Math.min(48, Number(parcelas) || 1));
+  const inicio = primeira || automatica;
+  const nomeMes = (m: string) => `${MESES[Number(m.slice(5)) - 1].toLowerCase()}/${m.slice(0, 4)}`;
+  const curto = (m: string) => `${MESES[Number(m.slice(5)) - 1].slice(0, 3).toLowerCase()}/${m.slice(0, 4)}`;
+  const meses = automatica ? Array.from({ length: 7 }, (_, i) => somarMeses(automatica, i - 2)) : [];
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <Campo rotulo="Cartão">
+          <Selecao name="cartao_id" required vazio="Escolha…" opcoes={cartoes} value={cartao} onChange={(e) => (setCartao(e.target.value), setPrimeira(""))} />
+        </Campo>
+        <Campo rotulo="Tipo">
+          <Selecao
+            name="direcao"
+            value={direcao}
+            onChange={(e) => setDirecao(e.target.value)}
+            opcoes={[{ valor: "saida", rotulo: "Compra" }, { valor: "entrada", rotulo: "Estorno ou crédito" }]}
+          />
+        </Campo>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Campo rotulo="Data da compra" dica="É a competência: entra no Resultado deste mês">
+          <Entrada name="data_compra" type="date" required value={dataCompra} onChange={(e) => (setDataCompra(e.target.value), setPrimeira(""))} />
+        </Campo>
+        <Campo rotulo="Valor total" dica={DICA_MOEDA}>
+          <EntradaMoeda name="valor_total" required value={total} onChange={setTotal} />
+        </Campo>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {direcao === "saida" ? (
+          <Campo rotulo="Parcelas">
+            <Entrada name="parcelas" type="number" min={1} max={48} required value={parcelas} onChange={(e) => setParcelas(e.target.value)} />
+          </Campo>
+        ) : (
+          <input type="hidden" name="parcelas" value="1" />
+        )}
+        <Campo rotulo={n > 1 ? "Fatura da 1ª parcela" : "Fatura"} dica="Automática: pelo dia de fechamento">
+          <Selecao
+            name="primeira_fatura"
+            value={primeira}
+            onChange={(e) => setPrimeira(e.target.value)}
+            vazio={automatica ? `Automática: ${curto(automatica)}` : "Escolha o cartão e a data"}
+            opcoes={meses.filter((m) => m !== automatica).map((m) => ({ valor: m, rotulo: `Vence em ${curto(m)}` }))}
+          />
+        </Campo>
+      </div>
+      {inicio && totalC !== null && totalC >= n && (
+        <p className="rounded-md bg-marca-50 px-3 py-2 text-xs text-marca-800">
+          {n === 1
+            ? `Entra na fatura que vence em ${nomeMes(inicio)}`
+            : `${n} parcelas de ${formatar(Math.floor(totalC / n))}${totalC % n ? ` (a primeira, ${formatar(Math.floor(totalC / n) + (totalC % n))})` : ""}, nas faturas de ${nomeMes(inicio)} a ${nomeMes(somarMeses(inicio, n - 1))}`}
+          . Fica prevista até a fatura ser paga; o Resultado mostra o valor cheio no mês da compra.
+        </p>
+      )}
+      <Campo rotulo="Descrição" dica={n > 1 ? "Cada parcela recebe (1/3), (2/3)… no fim" : undefined}>
+        <Entrada name="descricao" required placeholder="Material de escritório (Kalunga)" />
+      </Campo>
+      <Campo rotulo="Documento" dica="Nota fiscal ou recibo (opcional)">
+        <Entrada name="documento" />
+      </Campo>
+      {contrapartes && (
+        <Campo rotulo="Fornecedor" dica="Opcional">
+          <Selecao name="contraparte_id" vazio="(nenhum)" opcoes={contrapartes} />
+        </Campo>
+      )}
+      <BlocoRateio
+        contas={contas}
+        totalC={totalC}
+        dica={n > 1 ? "Divida o valor total da compra; cada parcela leva a mesma proporção." : "Com uma conta só, o valor da linha é o total."}
+      />
+      {contrapartes && (
+        <Campo rotulo="Observações">
+          <AreaTexto name="observacoes" rows={2} />
+        </Campo>
+      )}
+    </>
+  );
+}
+
+export function CamposPagamentoFatura({ total, vencimento }: { total: number; vencimento: string }) {
+  return (
+    <>
+      <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        Todas as compras desta fatura passam a realizadas na data do pagamento. O saldo da conta cai uma vez, em{" "}
+        {formatar(Math.round(total * 100))}, e o Fluxo de caixa mostra a saída nessa data, separada pelas categorias das compras.
+      </p>
+      <Campo rotulo="Data do pagamento">
+        <Entrada name="data_pagamento" type="date" required defaultValue={vencimento < hoje() ? vencimento : hoje()} />
+      </Campo>
+      <p className="text-xs text-slate-500">Só o pagamento total, nesta versão. Pode ser desfeito enquanto não estiver conciliado com o extrato.</p>
+    </>
+  );
+}
+
+export function CamposDatasFatura({ fechamento, vencimento }: { fechamento: string; vencimento: string }) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <Campo rotulo="Fechamento">
+          <Entrada name="data_fechamento" type="date" required defaultValue={fechamento} />
+        </Campo>
+        <Campo rotulo="Vencimento">
+          <Entrada name="data_vencimento" type="date" required defaultValue={vencimento} />
+        </Campo>
+      </div>
+      <p className="text-xs text-slate-500">As compras previstas da fatura passam a vencer na nova data.</p>
     </>
   );
 }

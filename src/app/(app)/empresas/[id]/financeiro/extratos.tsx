@@ -1,18 +1,22 @@
-import { Ban, FileText, Link2, Plus, Undo2 } from "lucide-react";
+import { Ban, CreditCard, FileText, Link2, Plus, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { BotaoAcao } from "@/components/controles";
 import { PainelLateral } from "@/components/painel-lateral";
 import { AreaTexto, CabecalhoCartao, Campo, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t, type Tom } from "@/components/ui";
 import { formatarData, formatarValor } from "@/lib/datas";
 import {
+  type BaseFinanceira,
   carregarConciliados,
   carregarExtratos,
+  carregarFaturas,
+  carregarFaturasConciliadas,
   carregarLancamentos,
   carregarMovimentosExtrato,
   carregarSaldos,
   carregarTransferencias,
 } from "@/lib/financeiro/consultas";
 import { compararCodigo, recebeLancamento, type ContaCaixa, type ContaPlano, type Contraparte, type SituacaoMovimento } from "@/lib/financeiro/dominio";
+import { candidatosFatura, totalDaFatura } from "@/lib/financeiro/cartao";
 import { candidatosConciliacao, candidatosTransferencia, somarDias } from "@/lib/financeiro/ofx";
 import { conciliarComFormulario, desfazerConciliacao, ignorarMovimento, lancarDoExtrato } from "@/server/financeiro";
 import { CamposLancamento } from "./campos";
@@ -37,6 +41,8 @@ export async function AbaExtratos({
   contas,
   caixas,
   contrapartes,
+  cartoes,
+  recursos,
   periodo,
   caixa,
   situacao,
@@ -45,17 +51,29 @@ export async function AbaExtratos({
   contas: ContaPlano[];
   caixas: ContaCaixa[];
   contrapartes: Contraparte[];
+  cartoes: BaseFinanceira["cartoes"];
+  recursos: BaseFinanceira["recursos"];
   periodo: Periodo;
   caixa: string | null;
   situacao: SituacaoMovimento | "todas";
 }) {
   const { inicio, fim } = periodo;
-  const [movimentos, extratos, lancamentos, transferencias] = await Promise.all([
-    carregarMovimentosExtrato(empresa.id, inicio, fim, caixa),
+  const [movimentos, extratos, todosLancamentos, transferencias, faturasBrutas, faturasConciliadas] = await Promise.all([
+    carregarMovimentosExtrato(empresa.id, inicio, fim, caixa, recursos.cartoes),
     carregarExtratos(empresa.id),
     carregarLancamentos(empresa.id, somarDias(inicio, -JANELA), somarDias(fim, JANELA), "movimento"),
     carregarTransferencias(empresa.id, somarDias(inicio, -JANELA), somarDias(fim, JANELA)),
+    recursos.cartoes ? carregarFaturas(empresa.id, somarDias(inicio, -JANELA), somarDias(fim, JANELA)) : Promise.resolve([]),
+    recursos.cartoes ? carregarFaturasConciliadas(empresa.id) : Promise.resolve(new Set<string>()),
   ]);
+  // Compra no cartão não se concilia sozinha: o que aparece no banco é o pagamento da fatura inteira.
+  const lancamentos = todosLancamentos.filter((l) => !l.fatura_id);
+  const faturas = faturasBrutas.map((f) => ({ ...f, total: totalDaFatura(f.compras) }));
+  const porFatura = new Map(faturas.map((f) => [f.id, f]));
+  const porCartao = new Map(cartoes.map((c) => [c.id, c]));
+  const caixaDoCartao = new Map(cartoes.map((c) => [c.id, c.conta_caixa_id]));
+  const nomeFatura = (f: { cartao_id: string; referencia: string }) =>
+    `${porCartao.get(f.cartao_id)?.nome ?? "Cartão"}, fatura de ${["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][Number(f.referencia.slice(5, 7)) - 1]}/${f.referencia.slice(0, 4)}`;
   const conciliados = await carregarConciliados(empresa.id, lancamentos.map((l) => l.id));
   const transfConciliadas = new Map<string, Set<string>>();
   for (const m of movimentos) {
@@ -202,6 +220,9 @@ export async function AbaExtratos({
                   m.situacao === "pendente" ? candidatosConciliacao(m, lancamentos, conciliados, JANELA) : [];
                 const candsT =
                   m.situacao === "pendente" ? candidatosTransferencia(m, transferencias, transfConciliadas.get(m.conta_caixa_id) ?? new Set(), JANELA) : [];
+                const candsF = m.situacao === "pendente" ? candidatosFatura(m, faturas, caixaDoCartao, faturasConciliadas, JANELA) : [];
+                const nCands = cands.length + candsT.length + candsF.length;
+                const fatura = m.fatura_id ? porFatura.get(m.fatura_id) : null;
                 return (
                   <tr key={m.id} className={cx(t.linha, m.situacao === "ignorado" && "text-slate-400")}>
                     <td className={`${t.td} whitespace-nowrap`}>{formatarData(m.data)}</td>
@@ -211,7 +232,9 @@ export async function AbaExtratos({
                       {m.situacao === "conciliado" && (
                         <span className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
                           <Link2 className="size-3.5" />
-                          {lanc
+                          {m.fatura_id
+                            ? `Fatura: ${fatura ? nomeFatura(fatura) : "cartão"}`
+                            : lanc
                             ? `Lançamento: ${lanc.descricao}`
                             : transf
                               ? `Transferência: ${nomeCaixa.get(transf.conta_origem_id)} → ${nomeCaixa.get(transf.conta_destino_id)}`
@@ -221,9 +244,9 @@ export async function AbaExtratos({
                         </span>
                       )}
                       {m.situacao === "ignorado" && m.motivo && <span className="mt-0.5 block text-xs">Motivo: {m.motivo}</span>}
-                      {m.situacao === "pendente" && cands.length + candsT.length > 0 && (
+                      {m.situacao === "pendente" && nCands > 0 && (
                         <span className="mt-0.5 block text-xs text-marca-700">
-                          {cands.length + candsT.length === 1 ? "1 possível correspondência" : `${cands.length + candsT.length} possíveis correspondências`}
+                          {nCands === 1 ? "1 possível correspondência" : `${nCands} possíveis correspondências`}
                         </span>
                       )}
                     </td>
@@ -257,9 +280,9 @@ export async function AbaExtratos({
                             aviso="Movimentação conciliada"
                           >
                             <ResumoMovimento descricao={m.descricao} valor={m.valor} data={m.data} caixa={nomeCaixa.get(m.conta_caixa_id)} />
-                            {cands.length + candsT.length === 0 ? (
+                            {nCands === 0 ? (
                               <p className="text-sm text-slate-600">
-                                Nenhum lançamento ou transferência desta conta de caixa com o mesmo valor e o mesmo sentido, até{" "}
+                                Nenhum lançamento, transferência{recursos.cartoes ? " ou fatura de cartão" : ""} desta conta de caixa com o mesmo valor e o mesmo sentido, até{" "}
                                 {JANELA} dias antes ou depois. Use Lançar para criar o lançamento a partir desta movimentação.
                               </p>
                             ) : (
@@ -279,13 +302,37 @@ export async function AbaExtratos({
                                     </span>
                                   </label>
                                 ))}
+                                {candsF.map(({ fatura: f, dias }, i) => (
+                                  <label key={f.id} className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
+                                    <input
+                                      type="radio"
+                                      name="vinculo"
+                                      value={`fatura:${f.id}`}
+                                      defaultChecked={cands.length === 0 && i === 0}
+                                      className="mt-1"
+                                      required
+                                    />
+                                    <span>
+                                      <span className="flex items-center gap-1 font-medium text-slate-900">
+                                        <CreditCard className="size-3.5 text-slate-400" />
+                                        {nomeFatura(f)}
+                                      </span>
+                                      <span className="block text-xs text-slate-500">
+                                        {f.situacao === "paga"
+                                          ? `Paga em ${formatarData(f.data_pagamento)}`
+                                          : `Vence em ${formatarData(f.data_vencimento)}: as ${f.compras.filter((c) => c.situacao !== "cancelado").length} compras passam a pagas em ${formatarData(m.data)}`}
+                                        {dias > 0 && ` · ${dias} dia${dias === 1 ? "" : "s"} de diferença`}
+                                      </span>
+                                    </span>
+                                  </label>
+                                ))}
                                 {candsT.map(({ transferencia: x, dias }, i) => (
                                   <label key={x.id} className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
                                     <input
                                       type="radio"
                                       name="vinculo"
                                       value={`transferencia:${x.id}`}
-                                      defaultChecked={cands.length === 0 && i === 0}
+                                      defaultChecked={cands.length + candsF.length === 0 && i === 0}
                                       className="mt-1"
                                       required
                                     />
@@ -343,10 +390,12 @@ export async function AbaExtratos({
                         </>
                       ) : (
                         <BotaoAcao
-                          acao={desfazerConciliacao.bind(null, m.id)}
+                          acao={desfazerConciliacao.bind(null, m.id, recursos.cartoes)}
                           pergunta={
                             m.situacao === "conciliado"
-                              ? "Desfazer a conciliação? A movimentação volta a pendente. O lançamento continua existindo, sem mudança; se ele foi criado a partir do extrato e não deve existir, cancele-o na aba Lançamentos."
+                              ? m.fatura_id
+                                ? "Desfazer a conciliação? A movimentação volta a pendente. A fatura continua paga; para desfazer o pagamento, use a aba Cartões."
+                                : "Desfazer a conciliação? A movimentação volta a pendente. O lançamento continua existindo, sem mudança; se ele foi criado a partir do extrato e não deve existir, cancele-o na aba Lançamentos."
                               : "Voltar esta movimentação para pendente?"
                           }
                           aviso="Movimentação voltou a pendente"

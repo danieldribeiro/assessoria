@@ -129,7 +129,33 @@ export type Lancamento = {
   // 0009: fornecedor ou cliente e observações. Ficam vazios até a migration ser aplicada.
   contraparte_id?: string | null;
   observacoes?: string | null;
+  // 0011: compra no cartão. A fatura decide a situação e as datas; parcela i de n de uma mesma compra.
+  fatura_id?: string | null;
+  compra_id?: string | null;
+  parcela?: number | null;
+  parcelas?: number | null;
   rateios: { conta_id: string; valor: number }[];
+};
+
+// Cartões de crédito e faturas (0011).
+export type Cartao = {
+  id: string;
+  empresa_id: string;
+  nome: string;
+  conta_caixa_id: string;
+  dia_fechamento: number;
+  dia_vencimento: number;
+  ativo: boolean;
+};
+export type Fatura = {
+  id: string;
+  cartao_id: string;
+  referencia: string; // primeiro dia do mês do vencimento
+  data_fechamento: string;
+  data_vencimento: string;
+  situacao: "aberta" | "paga";
+  data_pagamento: string | null;
+  valor_pago: number | null;
 };
 
 export const TIPOS_CONTRAPARTE = [
@@ -171,6 +197,7 @@ export type Movimento = {
   situacao: SituacaoMovimento;
   lancamento_id: string | null;
   transferencia_id: string | null;
+  fatura_id?: string | null; // 0011
   motivo: string | null;
 };
 export type Extrato = {
