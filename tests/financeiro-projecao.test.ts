@@ -133,3 +133,11 @@ describe("saldo projetado", () => {
     expect(alvoDoMes("2026-10-31")).toBe("2026-11-30");
   });
 });
+
+describe("eixo do gráfico de projeção", () => {
+  it("sem o zero, o eixo fica em volta dos saldos", async () => {
+    const { escala } = await import("@/components/graficos");
+    expect(escala(63125.51, 65637.15, 4, false)).toEqual({ lo: 63000, hi: 66000, marcas: [63000, 64000, 65000, 66000] });
+    expect(escala(1000, 1000, 4, false).lo).toBeLessThan(1000);
+  });
+});

@@ -24,10 +24,16 @@ const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL
 const compacto = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
 const rotuloEixo = (v: number) => (v === 0 ? "0" : `${v < 0 ? "−" : ""}R$ ${compacto.format(Math.abs(v))}`);
 
-// Marcas "redondas" para o eixo: 1, 2 ou 5 × 10^n.
-export function escala(min: number, max: number, alvo = 4) {
-  const lo = Math.min(0, min);
-  const hi = Math.max(0, max);
+// Marcas "redondas" para o eixo: 1, 2 ou 5 × 10^n. Sem o zero (comZero = false), o eixo vai só da menor à maior
+// marca em volta dos valores, para variações pequenas num saldo grande aparecerem.
+export function escala(min: number, max: number, alvo = 4, comZero = true) {
+  let lo = comZero ? Math.min(0, min) : min;
+  let hi = comZero ? Math.max(0, max) : max;
+  if (!comZero && lo === hi) {
+    const folga = Math.max(1, Math.abs(lo) * 0.05);
+    lo -= folga;
+    hi += folga;
+  }
   if (lo === hi) return { lo: 0, hi: 1, marcas: [0] };
   const bruto = (hi - lo) / alvo;
   const potencia = 10 ** Math.floor(Math.log10(bruto));
@@ -58,6 +64,7 @@ export function GraficoMensal({
   links,
   descricao,
   marca,
+  comZero = true,
 }: {
   rotulos: string[];
   series: Serie[];
@@ -65,13 +72,15 @@ export function GraficoMensal({
   descricao: string;
   // Destaca uma posição com uma linha tracejada e um rótulo (por exemplo, o dia de menor saldo).
   marca?: { indice: number; rotulo: string };
+  // false: o eixo não começa obrigatoriamente no zero (só para linhas, como um saldo ao longo do tempo).
+  comZero?: boolean;
 }) {
   const router = useRouter();
   const [ref, largura] = useLargura();
   const [ativo, setAtivo] = useState<number | null>(null);
   const n = rotulos.length;
   const todos = series.flatMap((s) => s.valores);
-  const { lo, hi, marcas } = escala(Math.min(...todos, 0), Math.max(...todos, 0));
+  const { lo, hi, marcas } = comZero ? escala(Math.min(...todos, 0), Math.max(...todos, 0)) : escala(Math.min(...todos), Math.max(...todos), 4, false);
   const larguraUtil = Math.max(0, largura - MARGEM.esquerda - MARGEM.direita);
   const faixa = n ? larguraUtil / n : 0;
   const alturaUtil = ALTURA - MARGEM.topo - MARGEM.base;
