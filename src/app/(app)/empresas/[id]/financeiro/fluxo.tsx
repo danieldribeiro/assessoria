@@ -8,6 +8,8 @@ import { conferirSaldos, diaAnterior, montarFluxo } from "@/lib/financeiro/fluxo
 import { textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
 import { FiltroPeriodo } from "./filtro";
 import { Alternador } from "./filtros-ui";
+import { GraficoProjecao } from "./projecao";
+import type { Horizonte } from "@/lib/financeiro/projecao";
 
 const moeda = (v: number) => formatarValor(v, "R$")!;
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -17,14 +19,18 @@ export async function AbaFluxo({
   empresa,
   contas,
   caixas,
+  recursos,
   periodo,
   base,
+  horizonte,
 }: {
   empresa: { id: string };
   contas: ContaPlano[];
   caixas: ContaCaixa[];
+  recursos: { cartoes: boolean };
   periodo: Periodo;
   base: "realizado" | "previsto";
+  horizonte: Horizonte;
 }) {
   const { meses, inicio, fim } = periodo;
   const [movimentos, saldosAntes, saldosFim, transferencias] = await Promise.all([
@@ -83,6 +89,14 @@ export async function AbaFluxo({
         </Cartao>
       ) : (
         <>
+          <GraficoProjecao
+            empresa={empresa}
+            contas={contas}
+            recursos={recursos}
+            horizonte={horizonte}
+            consulta={{ aba: "fluxo", de: periodo.de, ate: periodo.ate, base }}
+          />
+
           {base === "realizado" ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <Numero rotulo={`Saldo em ${formatarData(diaAnterior(inicio))}`} valor={saldoAntes} />
