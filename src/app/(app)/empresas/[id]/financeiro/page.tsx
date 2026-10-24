@@ -11,6 +11,7 @@ import { AbaFluxo } from "./fluxo";
 import { AbaFornecedores } from "./fornecedores";
 import { ORDENS, type Ordem } from "@/lib/financeiro/painel";
 import { lerPeriodo } from "@/lib/financeiro/periodo";
+import { HORIZONTES } from "@/lib/financeiro/projecao";
 import { AbaLancamentos } from "./lancamentos";
 import { AbaPainel, lerFiltros } from "./painel";
 import { AbaPlanoContas } from "./plano-contas";
@@ -123,7 +124,7 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
             <AbaPainel {...dados} periodo={periodo} base={valor("visao") === "caixa" ? "caixa" : "competencia"} filtros={filtros} />
           )}
           {aba === "resultado" && <AbaResultado {...dados} periodo={periodo} filtros={filtros} />}
-          {aba === "fluxo" && <AbaFluxo {...dados} periodo={periodo} base={base} />}
+          {aba === "fluxo" && <AbaFluxo {...dados} periodo={periodo} base={base} horizonte={HORIZONTES.find((h) => String(h) === valor("horizonte")) ?? 30} />}
           {aba === "apagar" && <AbaAPagar {...dados} />}
           {aba === "lancamentos" && (
             <AbaLancamentos

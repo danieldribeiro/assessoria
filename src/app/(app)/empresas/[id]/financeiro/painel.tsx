@@ -23,6 +23,7 @@ import {
 } from "@/lib/financeiro/painel";
 import { montarPeriodo, textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
 import { AvisoVencidas } from "./apagar";
+import { CartaoProjecao } from "./projecao";
 import { CampoFiltro, FiltroPeriodo, classeFiltro } from "./filtro";
 import { Alternador, type FiltroAtivo } from "./filtros-ui";
 
@@ -217,6 +218,8 @@ export async function AbaPainel({
               href={`?aba=caixas`}
             />
           </div>
+
+          <CartaoProjecao empresa={empresa} contas={contas} recursos={recursos} caixa={filtros.caixa} />
 
           {atual.length === 0 ? (
             <Cartao>

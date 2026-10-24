@@ -8,9 +8,11 @@ import { diasEntre, somarDiasData, somarMeses } from "@/lib/financeiro/periodo";
 // Quantos meses depois do atual a tela mostra.
 export const MESES_A_FRENTE = 6;
 
+// caixa: conta de caixa por onde o dinheiro vai passar (a do cartão, no caso da fatura).
+type BaseItem = { id: string; vencimento: string; direcao: Direcao; valor: number; caixa: string };
 export type ItemConta =
-  | { tipo: "lancamento"; id: string; vencimento: string; direcao: Direcao; valor: number; lancamento: Lancamento }
-  | { tipo: "fatura"; id: string; vencimento: string; direcao: Direcao; valor: number; fatura: Fatura; compras: Lancamento[] };
+  | (BaseItem & { tipo: "lancamento"; lancamento: Lancamento })
+  | (BaseItem & { tipo: "fatura"; fatura: Fatura; compras: Lancamento[] });
 
 export type ChaveGrupo = "vencidas" | "semana" | "mes" | `mes:${string}`;
 
@@ -36,7 +38,9 @@ export function grupoDoVencimento(vencimento: string, hoje: string, meses = MESE
   return null;
 }
 
-export function agruparContas(previstos: Lancamento[], faturas: Fatura[], hoje: string, meses = MESES_A_FRENTE): GrupoConta[] {
+// Os previstos como contas: cada lançamento é um item, e as compras de uma fatura aberta viram um item só, com o total
+// e o vencimento da fatura.
+export function itensContas(previstos: Lancamento[], faturas: Fatura[]): ItemConta[] {
   const abertas = new Map(faturas.filter((f) => f.situacao === "aberta").map((f) => [f.id, f]));
   const itens: ItemConta[] = [];
   const porFatura = new Map<string, Lancamento[]>();
@@ -48,7 +52,15 @@ export function agruparContas(previstos: Lancamento[], faturas: Fatura[], hoje: 
       if (g) g.push(l);
       else porFatura.set(f.id, [l]);
     } else {
-      itens.push({ tipo: "lancamento", id: l.id, vencimento: l.data_vencimento, direcao: l.direcao, valor: l.valor_total, lancamento: l });
+      itens.push({
+        tipo: "lancamento",
+        id: l.id,
+        vencimento: l.data_vencimento,
+        direcao: l.direcao,
+        valor: l.valor_total,
+        caixa: l.conta_caixa_id,
+        lancamento: l,
+      });
     }
   }
   for (const [id, compras] of porFatura) {
@@ -61,11 +73,17 @@ export function agruparContas(previstos: Lancamento[], faturas: Fatura[], hoje: 
       vencimento: f.data_vencimento,
       direcao: total > 0 ? "saida" : "entrada",
       valor: Math.abs(total),
+      // As compras de uma fatura ficam sempre na conta de caixa do cartão.
+      caixa: compras[0].conta_caixa_id,
       fatura: f,
       compras,
     });
   }
+  return itens;
+}
 
+export function agruparContas(previstos: Lancamento[], faturas: Fatura[], hoje: string, meses = MESES_A_FRENTE): GrupoConta[] {
+  const itens = itensContas(previstos, faturas);
   const grupos = new Map<ChaveGrupo, GrupoConta>();
   for (const item of itens) {
     const chave = grupoDoVencimento(item.vencimento, hoje, meses);

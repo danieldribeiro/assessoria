@@ -229,6 +229,22 @@ export async function carregarPrevistos(empresaId: string, ate: string) {
   })) as Lancamento[];
 }
 
+// Data do primeiro lançamento realizado da empresa: a estimativa da projeção só aparece com 28 dias de histórico.
+export async function carregarPrimeiroRealizado(empresaId: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("fin_lancamentos")
+    .select("data_liquidacao")
+    .eq("empresa_id", empresaId)
+    .eq("situacao", "realizado")
+    .not("data_liquidacao", "is", null)
+    .order("data_liquidacao")
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data?.data_liquidacao as string | undefined) ?? null;
+}
+
 export async function carregarTransferencias(empresaId: string, inicio: string, fim: string) {
   const supabase = await criarCliente();
   const { data, error } = await supabase

@@ -57,11 +57,14 @@ export function GraficoMensal({
   series,
   links,
   descricao,
+  marca,
 }: {
   rotulos: string[];
   series: Serie[];
   links?: (string | null)[];
   descricao: string;
+  // Destaca uma posição com uma linha tracejada e um rótulo (por exemplo, o dia de menor saldo).
+  marca?: { indice: number; rotulo: string };
 }) {
   const router = useRouter();
   const [ref, largura] = useLargura();
@@ -128,6 +131,30 @@ export function GraficoMensal({
 
           {ativo !== null && (
             <rect x={MARGEM.esquerda + faixa * ativo} y={MARGEM.topo} width={faixa} height={alturaUtil} className="fill-slate-100/70" />
+          )}
+
+          {marca && marca.indice < n && (
+            <g>
+              <line
+                x1={xCentro(marca.indice)}
+                x2={xCentro(marca.indice)}
+                y1={MARGEM.topo}
+                y2={MARGEM.topo + alturaUtil}
+                className="stroke-slate-400"
+                strokeWidth={1}
+                strokeDasharray="3 3"
+              />
+              <text
+                x={xCentro(marca.indice)}
+                y={MARGEM.topo}
+                dx={xCentro(marca.indice) > largura / 2 ? -6 : 6}
+                dy="0.8em"
+                textAnchor={xCentro(marca.indice) > largura / 2 ? "end" : "start"}
+                className="fill-slate-600 text-[11px] font-medium"
+              >
+                {marca.rotulo}
+              </text>
+            </g>
           )}
 
           {colunas.map((s, k) =>
