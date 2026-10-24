@@ -1,8 +1,9 @@
-import { ArrowLeftRight, ChevronRight, CreditCard, FileText, Landmark, LayoutDashboard, ListTree, ReceiptText, Scale, Store, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, ChevronRight, CreditCard, FileText, Landmark, LayoutDashboard, ListTree, ReceiptText, Scale, Store, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { cx } from "@/components/ui";
 import { hoje } from "@/lib/datas";
 import { carregarBaseFinanceira } from "@/lib/financeiro/consultas";
+import { AbaAPagar } from "./apagar";
 import { AbaCartoes } from "./cartoes";
 import { AbaContasCaixa } from "./contas-caixa";
 import { AbaExtratos } from "./extratos";
@@ -19,6 +20,7 @@ const ABAS: { aba: string; nome: string; icone: LucideIcon; recurso?: "fornecedo
   { aba: "painel", nome: "Painel", icone: LayoutDashboard },
   { aba: "resultado", nome: "Resultado", icone: Scale },
   { aba: "fluxo", nome: "Fluxo de caixa", icone: ArrowLeftRight },
+  { aba: "apagar", nome: "A pagar e receber", icone: CalendarClock },
   { aba: "lancamentos", nome: "Lançamentos", icone: ReceiptText },
   { aba: "cartoes", nome: "Cartões", icone: CreditCard, recurso: "cartoes" },
   { aba: "extratos", nome: "Extratos", icone: FileText, recurso: "extratos" },
@@ -92,6 +94,7 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
       )}
       {aba === "resultado" && <AbaResultado {...dados} periodo={periodo} filtros={filtros} />}
       {aba === "fluxo" && <AbaFluxo {...dados} periodo={periodo} base={base} />}
+      {aba === "apagar" && <AbaAPagar {...dados} />}
       {aba === "lancamentos" && (
         <AbaLancamentos
           {...dados}

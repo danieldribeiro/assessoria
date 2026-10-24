@@ -22,6 +22,7 @@ import {
   type Filtros,
 } from "@/lib/financeiro/painel";
 import { montarPeriodo, textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
+import { AvisoVencidas } from "./apagar";
 import { CampoFiltro, FiltroPeriodo, classeFiltro } from "./filtro";
 import { Alternador, type FiltroAtivo } from "./filtros-ui";
 
@@ -75,7 +76,7 @@ export async function AbaPainel({
   contas: ContaPlano[];
   caixas: ContaCaixa[];
   contrapartes: Contraparte[];
-  recursos: { fornecedores: boolean; extratos: boolean };
+  recursos: { fornecedores: boolean; extratos: boolean; cartoes: boolean };
   periodo: Periodo;
   base: Base;
   filtros: Filtros;
@@ -126,6 +127,7 @@ export async function AbaPainel({
 
   return (
     <div className="space-y-6">
+      <AvisoVencidas empresa={empresa} recursos={recursos} />
       <FiltroPeriodo
         aba="painel"
         periodo={periodo}

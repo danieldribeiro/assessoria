@@ -209,6 +209,26 @@ export async function carregarLancamentos(
   })) as Lancamento[];
 }
 
+// Previstos (contas a pagar e a receber) que vencem até a data, inclusive os já vencidos.
+export async function carregarPrevistos(empresaId: string, ate: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("fin_lancamentos")
+    .select("*, rateios:fin_lancamento_rateios(conta_id, valor)")
+    .eq("empresa_id", empresaId)
+    .eq("situacao", "previsto")
+    .lte("data_vencimento", ate)
+    .is("rateios.substituido_em", null)
+    .order("data_vencimento")
+    .order("criado_em");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((l) => ({
+    ...l,
+    valor_total: Number(l.valor_total),
+    rateios: (l.rateios ?? []).map((r: { conta_id: string; valor: number }) => ({ ...r, valor: Number(r.valor) })),
+  })) as Lancamento[];
+}
+
 export async function carregarTransferencias(empresaId: string, inicio: string, fim: string) {
   const supabase = await criarCliente();
   const { data, error } = await supabase
