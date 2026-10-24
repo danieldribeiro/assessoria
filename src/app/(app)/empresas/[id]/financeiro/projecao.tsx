@@ -185,6 +185,7 @@ export async function GraficoProjecao({
             { nome: "Só com as contas", forma: "linha", cor: 2, valores: soContas },
             ...(comOperacao ? [{ nome: "Com a operação estimada", forma: "linha" as const, cor: 1 as const, valores: comOperacao }] : []),
           ]}
+          comZero={false}
           marca={{ indice: menor, rotulo: `menor saldo · ${diaMes(pontos[menor].dia)}` }}
         />
         <p className="text-xs text-slate-500">

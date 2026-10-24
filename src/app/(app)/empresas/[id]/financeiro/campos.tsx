@@ -5,6 +5,7 @@ import { useState } from "react";
 import { EntradaMoeda } from "@/components/entrada-moeda";
 import { AreaTexto, Campo, Entrada, Selecao } from "@/components/ui";
 import { hoje } from "@/lib/datas";
+import { REPETICOES_MAXIMO, REPETICOES_PADRAO } from "@/lib/financeiro/repetir";
 import {
   CLASSIFICACOES,
   NOME_CAIXA,
@@ -339,7 +340,33 @@ export function CamposLancamento({
       {rateio}
       {observacoes}
       {juros}
+      {!l0 && !cartao && situacao === "previsto" && <CampoRepetir />}
     </>
+  );
+}
+
+// "Repetir todo mês": só ao lançar um previsto novo. Cria um lançamento por mês, cada um independente (editar ou
+// cancelar um não mexe nos outros).
+function CampoRepetir() {
+  const [repetir, setRepetir] = useState(false);
+  return (
+    <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+      <label className="flex items-start gap-2 text-sm text-slate-700">
+        <input type="checkbox" name="repetir" className="mt-1" checked={repetir} onChange={(e) => setRepetir(e.target.checked)} />
+        <span>
+          Repetir todo mês
+          <span className="block text-xs text-slate-500">
+            Para contas fixas (aluguel, contador, internet). Cria os próximos meses de uma vez, no mesmo dia e com o mesmo
+            valor, para entrarem nas contas a pagar e na projeção do caixa.
+          </span>
+        </span>
+      </label>
+      {repetir && (
+        <Campo rotulo="Quantos meses, contando este" dica={`De 2 a ${REPETICOES_MAXIMO}. Cada mês vira um lançamento separado: se o valor mudar, edite o mês.`}>
+          <Entrada name="repeticoes" type="number" min={2} max={REPETICOES_MAXIMO} step={1} required defaultValue={REPETICOES_PADRAO} className="w-28" />
+        </Campo>
+      )}
+    </div>
   );
 }
 

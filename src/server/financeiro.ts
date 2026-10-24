@@ -3,6 +3,7 @@
 import { CLASSIFICACOES, ehClassificacao, type ComportamentoCaixa } from "@/lib/financeiro/dominio";
 import { MAX_MOVIMENTOS } from "@/lib/financeiro/ofx";
 import { emCentavos, lerRateio } from "@/lib/financeiro/rateio";
+import { REPETICOES_MAXIMO, REPETICOES_PADRAO, datasDaSerie } from "@/lib/financeiro/repetir";
 import { criarCliente } from "@/lib/supabase/server";
 import { atualizarTelas, exigir, marcado, numeros, texto } from "@/server/util";
 
@@ -189,9 +190,25 @@ function camposNovos(dados: FormData) {
 export async function lancar(empresaId: string, dados: FormData) {
   const lido = lerLancamento(dados);
   if ("erro" in lido) return { erro: lido.erro };
+  const p = lido.parametros;
+  // "Repetir todo mês" (só previstos): cria um lançamento por mês, cada um independente, com a função de sempre.
+  let serie = [{ vencimento: p.p_vencimento, competencia: p.p_competencia }];
+  if (p.p_situacao === "previsto" && marcado(dados, "repetir")) {
+    const vezes = Number(texto(dados, "repeticoes") ?? REPETICOES_PADRAO);
+    if (!Number.isInteger(vezes) || vezes < 2 || vezes > REPETICOES_MAXIMO) {
+      return { erro: `Repetir: escolha de 2 a ${REPETICOES_MAXIMO} meses, contando este.` };
+    }
+    serie = datasDaSerie(p.p_vencimento!, p.p_competencia, vezes).map((d) => ({ vencimento: d.vencimento, competencia: d.competencia ?? d.vencimento }));
+  }
   const supabase = await criarCliente();
-  const { error } = await supabase.rpc("fin_lancar", { p_empresa: empresaId, ...lido.parametros });
-  if (error) return falhaFinanceira(error);
+  for (const [i, d] of serie.entries()) {
+    const { error } = await supabase.rpc("fin_lancar", { p_empresa: empresaId, ...p, p_vencimento: d.vencimento, p_competencia: d.competencia });
+    if (error) {
+      if (i > 0) atualizarTelas();
+      const falha = falhaFinanceira(error);
+      return i > 0 ? { erro: `${i} de ${serie.length} meses foram lançados; o de ${(d.vencimento ?? "").split("-").reverse().join("/")} falhou: ${falha?.erro}` } : falha;
+    }
+  }
   atualizarTelas();
 }
 
