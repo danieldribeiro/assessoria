@@ -84,7 +84,7 @@ export async function AbaAPagar({
                   <tr>
                     <th className={t.th}>Vencimento</th>
                     <th className={t.th}>Descrição</th>
-                    <th className={`${t.th} hidden md:table-cell`}>Conta de caixa</th>
+                    <th className={`${t.th} hidden whitespace-nowrap md:table-cell`}>Conta de caixa</th>
                     <th className={`${t.th} text-right`}>Valor</th>
                     <th className={t.th} />
                   </tr>
@@ -137,14 +137,16 @@ function Linha({
       <td className={`${t.td} whitespace-nowrap`}>
         {formatarData(item.vencimento)}
         {atraso > 0 && (
-          <Etiqueta tom="vermelho" className="mt-1 flex w-fit">
-            {atraso} {atraso === 1 ? "dia" : "dias"} de atraso
-          </Etiqueta>
+          <span className="mt-1 block">
+            <Etiqueta tom="vermelho">
+              {atraso} {atraso === 1 ? "dia" : "dias"} de atraso
+            </Etiqueta>
+          </span>
         )}
         {atraso === 0 && item.vencimento === dia && (
-          <Etiqueta tom="ambar" className="mt-1 flex w-fit">
-            vence hoje
-          </Etiqueta>
+          <span className="mt-1 block">
+            <Etiqueta tom="ambar">vence hoje</Etiqueta>
+          </span>
         )}
       </td>
       {/* max-w-0 + w-full: descrições longas são cortadas com "…", sem rolagem lateral */}
