@@ -293,16 +293,17 @@ export async function AbaLancamentos({
                         {formatarData(paga ? f?.data_pagamento : (f?.data_vencimento ?? x.compras[0].data_vencimento))}
                         {!paga && <span className="block text-xs text-slate-500">vencimento</span>}
                       </td>
-                      <td className={t.td}>
+                      {/* max-w-0 + w-full: a coluna ocupa o espaço que sobra e o resumo das contas é cortado com "…", sem rolagem lateral */}
+                      <td className={`${t.td} w-full max-w-0`}>
                         <PainelLeitura
                           titulo={titulo}
-                          classeGatilho="group text-left"
+                          classeGatilho="group block max-w-full text-left"
                           gatilho={
                             <>
                               <span className="flex items-center gap-1.5 font-medium text-slate-900 group-hover:text-marca-700">
-                                <CreditCard className="size-4 text-slate-400" />
-                                {titulo}
-                                <ChevronRight className="size-3.5 text-slate-400" />
+                                <CreditCard className="size-4 shrink-0 text-slate-400" />
+                                <span className="truncate">{titulo}</span>
+                                <ChevronRight className="size-3.5 shrink-0 text-slate-400" />
                               </span>
                               <span className="block text-xs text-slate-500">
                                 {ativas.length} {ativas.length === 1 ? "compra" : "compras"} · ver detalhes
@@ -329,9 +330,12 @@ export async function AbaLancamentos({
                             parcial={temFiltro || !!filtro}
                           />
                         </PainelLeitura>
-                        <span className="mt-0.5 block text-xs text-slate-500">
+                        <span
+                          className="mt-0.5 block truncate text-xs text-slate-500"
+                          title={categorias.map(([id, v]) => `${porId.get(id)?.nome ?? "conta"} ${moeda(v / 100)}`).join(" · ")}
+                        >
                           {categorias.slice(0, 3).map(([id, v], i) => (
-                            <span key={id} className="whitespace-nowrap">
+                            <span key={id}>
                               {i > 0 && " · "}
                               {porId.get(id)?.nome ?? "conta"} {moeda(v / 100)}
                             </span>
