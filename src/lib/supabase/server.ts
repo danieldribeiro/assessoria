@@ -1,8 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase/config";
+import { clienteDoContexto } from "@/lib/supabase/contexto";
 
 export async function criarCliente() {
+  const doContexto = clienteDoContexto.getStore();
+  if (doContexto) return doContexto;
+
   const cookieStore = await cookies();
 
   return createServerClient(

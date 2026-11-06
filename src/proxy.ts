@@ -24,6 +24,10 @@ export async function proxy(request: NextRequest) {
   const faltando = variaveisFaltando();
   if (faltando.length) return paginaConfiguracao(faltando);
 
+  // Conector do Claude: cada pedido traz o próprio token, sem cookies nem tela de login.
+  const caminho = request.nextUrl.pathname;
+  if (caminho.startsWith("/api/mcp") || caminho.startsWith("/.well-known/")) return NextResponse.next();
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -50,7 +54,6 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const caminho = request.nextUrl.pathname;
   const naLogin = caminho.startsWith("/login");
   if (!user && !naLogin && !caminho.startsWith("/auth/")) {
     return NextResponse.redirect(new URL("/login", request.url));
