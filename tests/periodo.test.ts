@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deslocar, lerPeriodo, nomePeriodo, somarMeses, textoPeriodo } from "@/lib/financeiro/periodo";
+import { atalhoAtivo, deslocar, lerPeriodo, nomePeriodo, periodoAtalho, somarMeses, textoPeriodo } from "@/lib/financeiro/periodo";
 
 describe("período do financeiro", () => {
   it("anda meses atravessando o ano", () => {
@@ -44,5 +44,25 @@ describe("período do financeiro", () => {
     expect(nomePeriodo(lerPeriodo("2026-10-01", "2026-10-01", "x"))).toBe("01/10/26");
     expect(textoPeriodo("2026-10-01", "2026-10-31")).toBe("out/26");
     expect(textoPeriodo("2026-10-01", "2026-10-05")).toBe("01/10/26 a 05/10/26");
+  });
+
+  it("monta os atalhos Mês, YTD e 1 ano a partir de hoje", () => {
+    expect(periodoAtalho("mes", "2026-11-07")).toEqual({ de: "2026-11", ate: "2026-11" });
+    expect(periodoAtalho("ytd", "2026-11-07")).toEqual({ de: "2026-01", ate: "2026-11" });
+    expect(periodoAtalho("12m", "2026-11-07")).toEqual({ de: "2025-12", ate: "2026-11" });
+    expect(periodoAtalho("12m", "2026-01-15")).toEqual({ de: "2025-02", ate: "2026-01" });
+  });
+
+  it("reconhece o atalho do período em uso", () => {
+    const hoje = "2026-11-07";
+    const ler = (de: string, ate: string) => lerPeriodo(de, ate, hoje);
+    expect(atalhoAtivo(ler("2026-11", "2026-11"), hoje)).toBe("mes");
+    expect(atalhoAtivo(ler("2026-08", "2026-08"), hoje)).toBe("mes");
+    expect(atalhoAtivo(ler("2026-01", "2026-11"), hoje)).toBe("ytd");
+    expect(atalhoAtivo(ler("2025-12", "2026-11"), hoje)).toBe("12m");
+    expect(atalhoAtivo(ler("2026-06", "2026-10"), hoje)).toBeNull();
+    expect(atalhoAtivo(ler("2026-10-01", "2026-10-05"), hoje)).toBeNull();
+    // Em janeiro, YTD é um mês só: fica "Mês".
+    expect(atalhoAtivo(lerPeriodo("2026-01", "2026-01", "2026-01-10"), "2026-01-10")).toBe("mes");
   });
 });
