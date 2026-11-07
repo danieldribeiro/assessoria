@@ -5,14 +5,20 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cx } from "@/components/ui";
-import { deslocar, nomePeriodo, somarDiasData, type Periodo } from "@/lib/financeiro/periodo";
+import { atalhoAtivo, deslocar, nomePeriodo, periodoAtalho, somarDiasData, type Atalho, type Periodo } from "@/lib/financeiro/periodo";
 
+const ATALHOS: { atalho: Atalho; rotulo: string; titulo: string }[] = [
+  { atalho: "mes", rotulo: "Mês", titulo: "Mês atual" },
+  { atalho: "ytd", rotulo: "YTD", titulo: "De janeiro até o mês atual" },
+  { atalho: "12m", rotulo: "1 ano", titulo: "Últimos 12 meses, até o mês atual" },
+];
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const classeCampo = "rounded-lg border border-slate-200 bg-superficie px-2 py-1.5 text-sm text-slate-900";
 
 // Seletor de período "‹ Outubro 2026 ›". As setas andam o tamanho do período (um mês, vários meses ou alguns
 // dias) e mantêm os outros filtros do endereço. Clicando no nome, escolhe-se um ou mais meses, ou dias
 // quaisquer ("Dias": 01/10 a 05/10). Os campos escondidos `de` e `ate` vão junto com o formulário de filtros.
+// Ao lado, os atalhos Mês · YTD · 1 ano · Personalizado; "Personalizado" abre a mesma escolha do nome.
 export function SeletorPeriodo({ periodo, hoje }: { periodo: Periodo; hoje: string }) {
   const caminho = usePathname();
   const busca = useSearchParams();
@@ -36,13 +42,14 @@ export function SeletorPeriodo({ periodo, hoje }: { periodo: Periodo; hoje: stri
     };
   }, [aberto]);
 
-  const link = (sentido: 1 | -1) => {
+  const endereco = (p: { de: string; ate: string }) => {
     const q = new URLSearchParams(busca.toString());
-    const p = deslocar(periodo, sentido);
     q.set("de", p.de);
     q.set("ate", p.ate);
     return `${caminho}?${q}`;
   };
+  const link = (sentido: 1 | -1) => endereco(deslocar(periodo, sentido));
+  const ativo = atalhoAtivo(periodo, hoje);
   const abrir = () => {
     setModo(periodo.emMeses ? "meses" : "dias");
     setMesDe(periodo.inicio.slice(0, 7));
@@ -58,8 +65,14 @@ export function SeletorPeriodo({ periodo, hoje }: { periodo: Periodo; hoje: stri
   const classeSeta = "flex size-9 items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-900";
   const atalho = "rounded-md px-2 py-1 text-xs font-medium text-marca-700 hover:bg-marca-50";
 
+  const classeAtalho = (sel: boolean) =>
+    cx(
+      "rounded-md px-2.5 py-1 text-sm font-medium",
+      sel ? "bg-superficie text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800",
+    );
+
   return (
-    <div ref={caixa} className="relative">
+    <div ref={caixa} className="relative flex flex-wrap items-center gap-2">
       <div className="flex items-center overflow-hidden rounded-lg border border-slate-200 bg-superficie shadow-xs">
         <Link href={link(-1)} className={classeSeta} aria-label="Período anterior">
           <ChevronLeft className="size-4" />
@@ -78,11 +91,27 @@ export function SeletorPeriodo({ periodo, hoje }: { periodo: Periodo; hoje: stri
           <ChevronRight className="size-4" />
         </Link>
       </div>
+      <div role="group" aria-label="Atalhos de período" className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+        {ATALHOS.map((a) => (
+          <Link
+            key={a.atalho}
+            href={endereco(periodoAtalho(a.atalho, hoje))}
+            title={a.titulo}
+            aria-current={ativo === a.atalho ? "true" : undefined}
+            className={classeAtalho(ativo === a.atalho)}
+          >
+            {a.rotulo}
+          </Link>
+        ))}
+        <button type="button" onClick={abrir} aria-expanded={aberto} className={classeAtalho(ativo === null)}>
+          Personalizado
+        </button>
+      </div>
       <input type="hidden" name="de" value={de} />
       <input type="hidden" name="ate" value={ate} />
 
       {aberto && (
-        <div className="absolute left-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl border border-slate-200 bg-superficie p-4 shadow-lg">
+        <div className="absolute left-0 top-full z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl border border-slate-200 bg-superficie p-4 shadow-lg">
           <div role="tablist" aria-label="Tipo de período" className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
             {(["meses", "dias"] as const).map((m) => (
               <button

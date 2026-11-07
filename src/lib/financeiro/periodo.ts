@@ -84,6 +84,29 @@ export function deslocar(p: Periodo, sentido: 1 | -1) {
   return { de: q.de, ate: q.ate };
 }
 
+// Atalhos do seletor, no estilo das aplicações financeiras, sempre contados a partir do mês de hoje:
+// "mes" é o mês atual, "ytd" vai de janeiro até o mês atual e "12m" são os 12 meses que terminam no mês atual.
+export type Atalho = "mes" | "ytd" | "12m";
+
+export function periodoAtalho(atalho: Atalho, hoje: string) {
+  const mes = hoje.slice(0, 7);
+  if (atalho === "ytd") return { de: `${mes.slice(0, 4)}-01`, ate: mes };
+  if (atalho === "12m") return { de: somarMeses(mes, -11), ate: mes };
+  return { de: mes, ate: mes };
+}
+
+// Qual atalho o período corresponde, ou null (personalizado). Em janeiro, "Mês" e "YTD" coincidem: vale "Mês".
+// Qualquer mês inteiro sozinho conta como "Mês", para que as setas não tirem o destaque.
+export function atalhoAtivo(p: Periodo, hoje: string): Atalho | null {
+  if (!p.emMeses) return null;
+  if (p.de === p.ate) return "mes";
+  for (const a of ["ytd", "12m"] as const) {
+    const q = periodoAtalho(a, hoje);
+    if (q.de === p.de && q.ate === p.ate) return a;
+  }
+  return null;
+}
+
 const diaCurto = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`;
 
 // Nome do seletor: "Outubro 2026", "Junho a Outubro 2026", "01/10/26 – 05/10/26".
