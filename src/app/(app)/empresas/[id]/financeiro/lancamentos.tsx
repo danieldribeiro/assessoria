@@ -40,6 +40,7 @@ export async function AbaLancamentos({
   criterio,
   filtros,
   ordem,
+  somenteLeitura = false,
 }: {
   empresa: { id: string };
   contas: ContaPlano[];
@@ -52,6 +53,8 @@ export async function AbaLancamentos({
   criterio: "movimento" | "competencia";
   filtros: Filtros;
   ordem: Ordem;
+  /** Central da clínica: mostra tudo, sem lançar, editar, realizar nem cancelar. */
+  somenteLeitura?: boolean;
 }) {
   const { inicio, fim } = periodo;
   const [todos, transferencias] = await Promise.all([
@@ -170,7 +173,7 @@ export async function AbaLancamentos({
           </>
         }
         acoes={
-          podeLancar && (
+          !somenteLeitura && podeLancar && (
               <div className="flex flex-wrap gap-2">
                 <PainelLateral
                   titulo="Nova transferência entre contas"
@@ -224,7 +227,7 @@ export async function AbaLancamentos({
         }
       />
 
-      {!podeLancar && (
+      {!somenteLeitura && !podeLancar && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Para lançar, a empresa precisa de ao menos uma conta de caixa ativa e uma conta analítica ativa que movimente
           caixa no plano de contas.
@@ -311,7 +314,7 @@ export async function AbaLancamentos({
                             </>
                           }
                           rodape={
-                            f && (
+                            f && !somenteLeitura && (
                               <Link
                                 href={`?${new URLSearchParams({ aba: "cartoes", de: mes, ate: mes, cartao: f.cartao_id })}`}
                                 className="text-sm font-medium text-marca-700 hover:underline"
@@ -428,7 +431,7 @@ export async function AbaLancamentos({
                       )}
                     </td>
                     <td className={`${t.td} whitespace-nowrap text-right`}>
-                      {l.situacao !== "cancelado" && (
+                      {!somenteLeitura && l.situacao !== "cancelado" && (
                         <PainelLateral
                           titulo="Editar lançamento"
                           gatilho={
@@ -459,7 +462,7 @@ export async function AbaLancamentos({
                           />
                         </PainelLateral>
                       )}
-                      {l.situacao === "previsto" && !l.fatura_id && (
+                      {!somenteLeitura && l.situacao === "previsto" && !l.fatura_id && (
                         <PainelLateral
                           titulo={`Marcar como realizado: ${l.descricao}`}
                           gatilho={
@@ -476,7 +479,7 @@ export async function AbaLancamentos({
                           <CamposLiquidacao />
                         </PainelLateral>
                       )}
-                      {l.fatura_id && l.compra_id && l.situacao === "previsto" && (
+                      {!somenteLeitura && l.fatura_id && l.compra_id && l.situacao === "previsto" && (
                         <BotaoAcao
                           acao={cancelarCompra.bind(null, l.compra_id)}
                           pergunta={`Cancelar a compra no cartão “${l.descricao}”? ${(l.parcelas ?? 1) > 1 ? "Todas as parcelas em faturas ainda não pagas são canceladas. " : ""}Ela sai do Resultado e da fatura, mas continua registrada.`}
@@ -486,7 +489,7 @@ export async function AbaLancamentos({
                           Cancelar
                         </BotaoAcao>
                       )}
-                      {l.situacao !== "cancelado" && !l.fatura_id && !conciliados.has(l.id) && (
+                      {!somenteLeitura && l.situacao !== "cancelado" && !l.fatura_id && !conciliados.has(l.id) && (
                         <BotaoAcao
                           acao={cancelarLancamento.bind(null, l.id)}
                           pergunta={`Cancelar o lançamento “${l.descricao}”? Ele sai do saldo e do fluxo, mas continua registrado. Isso não pode ser desfeito.`}
@@ -525,7 +528,7 @@ export async function AbaLancamentos({
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="tabular-nums">{moeda(x.valor)}</span>
-                  {x.situacao === "realizado" && (
+                  {!somenteLeitura && x.situacao === "realizado" && (
                     <BotaoAcao
                       acao={cancelarTransferencia.bind(null, x.id)}
                       pergunta="Cancelar esta transferência? Os saldos das duas contas voltam ao que eram. Isso não pode ser desfeito."

@@ -60,7 +60,7 @@ export function linkLancamentos(
   if (filtros.secoes?.length) p.set("secoes", filtros.secoes.join(","));
   if (filtros.contraparte) p.set("contraparte", filtros.contraparte);
   if (filtros.ordem) p.set("ordem", filtros.ordem);
-  return `/empresas/${empresaId}/financeiro?${p}`;
+  return `?${p}`;
 }
 
 export async function AbaPainel({
@@ -72,6 +72,7 @@ export async function AbaPainel({
   periodo,
   base,
   filtros,
+  somenteLeitura = false,
 }: {
   empresa: { id: string };
   contas: ContaPlano[];
@@ -81,6 +82,8 @@ export async function AbaPainel({
   periodo: Periodo;
   base: Base;
   filtros: Filtros;
+  /** Central da clínica: sem atalhos para cadastrar, importar ou abrir abas que só a equipe tem. */
+  somenteLeitura?: boolean;
 }) {
   const { meses, inicio, fim } = periodo;
   const { inicio: inicioAnterior, fim: fimAnterior } = periodo.anterior;
@@ -169,6 +172,10 @@ export async function AbaPainel({
       {caixas.length === 0 || contas.length === 0 ? (
         <Cartao>
           <Vazio icone={<ChartColumn />}>
+            {somenteLeitura ? (
+              "O financeiro desta empresa ainda está sendo montado pela assessoria."
+            ) : (
+              <>
             O painel usa os lançamentos da empresa. Para começar, cadastre{" "}
             {contas.length === 0 ? (
               <Link className="font-medium text-marca-700 hover:underline" href="?aba=plano">
@@ -180,6 +187,8 @@ export async function AbaPainel({
               </Link>
             )}
             .
+              </>
+            )}
           </Vazio>
         </Cartao>
       ) : (
@@ -215,7 +224,7 @@ export async function AbaPainel({
               anterior={saldoAntes}
               textoAnterior={`vs ${formatarData(fimAnterior)}`}
               sinal
-              href={`?aba=caixas`}
+              href={somenteLeitura ? `?aba=fluxo` : `?aba=caixas`}
             />
           </div>
 
@@ -229,7 +238,7 @@ export async function AbaPainel({
                   Os gráficos aparecem assim que houver receitas ou despesas lançadas. Os números vêm só dos lançamentos
                   cadastrados{recursos.extratos ? "; movimentações de extrato importadas só entram depois de conciliadas" : ""}.
                 </p>
-                <span className="mt-4 flex flex-wrap justify-center gap-2">
+                <span className={cx("mt-4 flex-wrap justify-center gap-2", somenteLeitura ? "hidden" : "flex")}>
                   <Link href="?aba=lancamentos" className={classeBotao("primario", true)}>
                     <Plus />
                     Ir para os lançamentos
@@ -316,7 +325,7 @@ export async function AbaPainel({
                       vazio={
                         <>
                           Nenhuma despesa no período.{" "}
-                          {contrapartes.length === 0 && (
+                          {!somenteLeitura && contrapartes.length === 0 && (
                             <Link href="?aba=fornecedores" className="font-medium text-marca-700 hover:underline">
                               Cadastre os fornecedores
                             </Link>

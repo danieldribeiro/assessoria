@@ -11,7 +11,20 @@ function semTabela(error: { code?: string; message: string } | null) {
   return !!error && (error.code === "42P01" || error.code === "PGRST205" || /does not exist|Could not find the table/i.test(error.message));
 }
 
-export async function carregarBaseFinanceira(empresaId: string) {
+// Na central da clínica (origem "central"), o cliente não lê a tabela empresas: o nome vem de
+// central_financeiro_empresa, que volta vazio se a chave do financeiro estiver desligada.
+async function carregarEmpresa(supabase: Awaited<ReturnType<typeof criarCliente>>, empresaId: string, origem: "equipe" | "central") {
+  if (origem === "central") {
+    const { data, error } = await supabase.rpc("central_financeiro_empresa", { p_empresa: empresaId });
+    if (error && !/central_financeiro_empresa/.test(error.message)) throw new Error(error.message);
+    return { data: (data ?? null) as Record<string, unknown> | null };
+  }
+  // "*" e não a lista de colunas: financeiro_na_central só existe depois da migration 0012.
+  const { data } = await supabase.from("empresas").select("*").eq("id", empresaId).maybeSingle();
+  return { data: (data ?? null) as Record<string, unknown> | null };
+}
+
+export async function carregarBaseFinanceira(empresaId: string, origem: "equipe" | "central" = "equipe") {
   const supabase = await criarCliente();
   const [
     { data: empresa },
@@ -21,7 +34,7 @@ export async function carregarBaseFinanceira(empresaId: string) {
     { error: e4 },
     { data: cartoes, error: e5 },
   ] = await Promise.all([
-      supabase.from("empresas").select("id, nome, segmento").eq("id", empresaId).maybeSingle(),
+      carregarEmpresa(supabase, empresaId, origem),
       supabase.from("fin_contas").select("*").eq("empresa_id", empresaId),
       supabase.from("fin_contas_caixa").select("*").eq("empresa_id", empresaId).order("ordem").order("nome"),
       supabase.from("fin_contrapartes").select("id, empresa_id, nome, tipo, documento, ativa").eq("empresa_id", empresaId).order("nome"),
@@ -34,7 +47,9 @@ export async function carregarBaseFinanceira(empresaId: string) {
   if (e4 && !semTabela(e4)) throw new Error(e4.message);
   if (e5 && !semTabela(e5)) throw new Error(e5.message);
   return {
-    empresa: empresa as { id: string; nome: string; segmento: string | null },
+    empresa: { id: empresa.id, nome: empresa.nome, segmento: empresa.segmento ?? null } as { id: string; nome: string; segmento: string | null },
+    // A chave da 0012: o financeiro desta empresa aparece na central da clínica (só para ver).
+    naCentral: empresa.financeiro_na_central === true,
     contas: (contas ?? []) as ContaPlano[],
     caixas: (caixas ?? []).map((c) => ({ ...c, saldo_inicial: Number(c.saldo_inicial) })) as ContaCaixa[],
     contrapartes: (contrapartes ?? []) as Contraparte[],

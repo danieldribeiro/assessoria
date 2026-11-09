@@ -27,6 +27,7 @@ export async function AbaAPagar({
   contrapartes,
   cartoes,
   recursos,
+  somenteLeitura = false,
 }: {
   empresa: { id: string };
   contas: ContaPlano[];
@@ -34,6 +35,8 @@ export async function AbaAPagar({
   contrapartes: Contraparte[];
   cartoes: CartaoCredito[];
   recursos: { cartoes: boolean };
+  /** Central da clínica: mostra as contas sem o botão de marcar como realizado. */
+  somenteLeitura?: boolean;
 }) {
   const dia = hoje();
   const previstos = await carregarPrevistos(empresa.id, limiteContas(dia));
@@ -99,6 +102,7 @@ export async function AbaAPagar({
                       nomeCaixa={nomeCaixa}
                       nomeContraparte={nomeContraparte}
                       cartaoPorId={cartaoPorId}
+                      somenteLeitura={somenteLeitura}
                     />
                   ))}
                 </tbody>
@@ -118,6 +122,7 @@ function Linha({
   nomeCaixa,
   nomeContraparte,
   cartaoPorId,
+  somenteLeitura,
 }: {
   item: ItemConta;
   dia: string;
@@ -125,6 +130,7 @@ function Linha({
   nomeCaixa: Map<string, string>;
   nomeContraparte: Map<string, string>;
   cartaoPorId: Map<string, CartaoCredito>;
+  somenteLeitura: boolean;
 }) {
   const atraso = diasDeAtraso(item.vencimento, dia);
   const sinal = item.direcao === "saida" ? -1 : 1;
@@ -153,16 +159,25 @@ function Linha({
       <td className={`${t.td} w-full max-w-0`}>
         {item.tipo === "fatura" ? (
           <>
-            <Link
-              href={`?${new URLSearchParams({ aba: "cartoes", de: mes, ate: mes, cartao: item.fatura.cartao_id })}`}
-              className="group flex items-center gap-1.5 font-medium text-slate-900 hover:text-marca-700"
-            >
-              <CreditCard className="size-4 shrink-0 text-slate-400" />
-              <span className="truncate">
-                Fatura {cartao?.nome ?? "do cartão"} · {formatarMes(item.fatura.referencia)}
+            {somenteLeitura ? (
+              <span className="flex items-center gap-1.5 font-medium text-slate-900">
+                <CreditCard className="size-4 shrink-0 text-slate-400" />
+                <span className="truncate">
+                  Fatura {cartao?.nome ?? "do cartão"} · {formatarMes(item.fatura.referencia)}
+                </span>
               </span>
-              <ChevronRight className="size-3.5 shrink-0 text-slate-400" />
-            </Link>
+            ) : (
+              <Link
+                href={`?${new URLSearchParams({ aba: "cartoes", de: mes, ate: mes, cartao: item.fatura.cartao_id })}`}
+                className="group flex items-center gap-1.5 font-medium text-slate-900 hover:text-marca-700"
+              >
+                <CreditCard className="size-4 shrink-0 text-slate-400" />
+                <span className="truncate">
+                  Fatura {cartao?.nome ?? "do cartão"} · {formatarMes(item.fatura.referencia)}
+                </span>
+                <ChevronRight className="size-3.5 shrink-0 text-slate-400" />
+              </Link>
+            )}
             <span className="block text-xs text-slate-500">
               {item.compras.length} {item.compras.length === 1 ? "compra" : "compras"} · fatura aberta
             </span>
@@ -188,7 +203,7 @@ function Linha({
         {moeda(sinal * item.valor)}
       </td>
       <td className={`${t.td} whitespace-nowrap text-right`}>
-        {item.tipo === "lancamento" && !item.lancamento.fatura_id && (
+        {!somenteLeitura && item.tipo === "lancamento" && !item.lancamento.fatura_id && (
           <PainelLateral
             titulo={`Marcar como realizado: ${item.lancamento.descricao}`}
             gatilho={
