@@ -82,7 +82,11 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
           <ChevronRight className="size-3.5" />
         </Link>
         <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-slate-900">Financeiro</h1>
-        <p className="mt-1 text-sm text-slate-500">Só a equipe vê e lança. Nada daqui aparece na central da clínica.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          {dados.naCentral
+            ? "Só a equipe lança. Quem tem acesso à central da clínica vê o painel, o resultado, o fluxo, as contas e os lançamentos, sem editar."
+            : "Só a equipe vê e lança. Nada daqui aparece na central da clínica."}
+        </p>
       </div>
 
       <div className="lg:grid lg:grid-cols-[12.5rem_minmax(0,1fr)] lg:items-start lg:gap-8">

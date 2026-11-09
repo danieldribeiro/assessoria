@@ -44,6 +44,14 @@ export async function removerAcesso(id: string) {
   atualizarTelas();
 }
 
+// Liga ou desliga o financeiro (só leitura) na central desta clínica.
+export async function definirFinanceiroNaCentral(empresaId: string, ligado: boolean) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.from("empresas").update({ financeiro_na_central: ligado }).eq("id", empresaId);
+  exigir(error);
+  atualizarTelas();
+}
+
 export async function definirPapel(perfilId: string, papel: "equipe" | "cliente") {
   const supabase = await criarCliente();
   const { error } = await supabase.rpc("definir_papel", { p_perfil: perfilId, p_papel: papel });

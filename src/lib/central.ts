@@ -39,6 +39,18 @@ export async function empresaDaCentral(id: string, papel: Papel) {
   return (await empresasDaCentral()).find((e) => e.id === id) ?? null;
 }
 
+// O financeiro desta clínica aparece na central? A equipe vê o que o cliente veria (a chave da empresa);
+// para o cliente, o banco confere o acesso e a chave. Antes da migration 0012, sempre não.
+export async function financeiroNaCentral(empresaId: string, papel: Papel) {
+  const supabase = await criarCliente();
+  if (papel === "equipe") {
+    const { data } = await supabase.from("empresas").select("financeiro_na_central").eq("id", empresaId).maybeSingle();
+    return !!(data as { financeiro_na_central?: boolean } | null)?.financeiro_na_central;
+  }
+  const { data } = await supabase.rpc("central_financeiro_empresa", { p_empresa: empresaId });
+  return !!data;
+}
+
 export async function assessoriaDaCentral() {
   const supabase = await criarCliente();
   const { data } = await supabase.rpc("central_assessoria");

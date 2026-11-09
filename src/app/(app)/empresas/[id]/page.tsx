@@ -1,7 +1,7 @@
 import { Eye, FileText, MonitorSmartphone, Pencil, Plus, Wallet } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BotaoExcluir } from "@/components/controles";
+import { BotaoAcao, BotaoExcluir } from "@/components/controles";
 import { EtiquetaStatus } from "@/components/etiquetas";
 import { CamposContato, CamposDiagnostico, CamposEmpresa } from "@/components/formularios";
 import { PainelLateral } from "@/components/painel-lateral";
@@ -22,7 +22,7 @@ import { enderecoEmLinhas, type Contato, type Diagnostico, type Empresa } from "
 import { formatarData, formatarPeriodo } from "@/lib/datas";
 import { listarEquipe, ultimasAreas, usuarioAtual } from "@/lib/consultas";
 import { criarCliente } from "@/lib/supabase/server";
-import { liberarAcesso, removerAcesso } from "@/server/central";
+import { definirFinanceiroNaCentral, liberarAcesso, removerAcesso } from "@/server/central";
 import { criarDiagnostico } from "@/server/diagnosticos";
 import { excluirContato, excluirEmpresa, salvarContato, salvarEmpresa } from "@/server/empresas";
 
@@ -31,6 +31,8 @@ type Acesso = { id: string; email: string; nome: string | null; ultimo_acesso: s
 type EmpresaDetalhe = Empresa & {
   contatos: Contato[];
   acessos_central: Acesso[];
+  // Migration 0012: sem ela, a coluna não vem e a chave não aparece.
+  financeiro_na_central?: boolean;
   diagnosticos: (Diagnostico & { responsavel: { nome: string } | null })[];
 };
 
@@ -296,7 +298,8 @@ function CentralDaClinica({ empresa }: { empresa: EmpresaDetalhe }) {
         >
           <p className="rounded-md bg-marca-50 px-3 py-2 text-sm text-marca-800">
             A pessoa abre o endereço do sistema, toca em “É dono de clínica? Entre com um link por e-mail” e recebe o
-            link neste e-mail. Ela vê só esta clínica e só os diagnósticos publicados.
+            link neste e-mail. Ela vê só esta clínica, só os diagnósticos publicados e, se você ligar, o financeiro (só
+            para ver, sem editar nada).
           </p>
           <Campo rotulo="Nome">
             <Entrada name="nome" defaultValue={sugestoes[0]?.nome ?? ""} />
@@ -330,6 +333,33 @@ function CentralDaClinica({ empresa }: { empresa: EmpresaDetalhe }) {
             </li>
           ))}
         </ul>
+      )}
+      {empresa.financeiro_na_central !== undefined && (
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-sm">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 font-medium text-slate-900">
+              <Wallet className="size-4 text-slate-400" />
+              Financeiro na central: {empresa.financeiro_na_central ? "ligado" : "desligado"}
+            </div>
+            <div className="text-xs text-slate-500">
+              {empresa.financeiro_na_central
+                ? "Quem tem acesso vê painel, resultado, fluxo de caixa, contas a pagar e lançamentos. Só para ver."
+                : "Ligue para quem tem acesso ver o financeiro desta clínica, sem poder editar."}
+            </div>
+          </div>
+          <BotaoAcao
+            acao={definirFinanceiroNaCentral.bind(null, empresa.id, !empresa.financeiro_na_central)}
+            pergunta={
+              empresa.financeiro_na_central
+                ? "Tirar o financeiro da central desta clínica? Quem tem acesso deixa de ver na hora."
+                : "Mostrar o financeiro na central desta clínica? Quem tem acesso passa a ver tudo do financeiro, só para ler."
+            }
+            aviso={empresa.financeiro_na_central ? "Financeiro tirado da central" : "Financeiro liberado na central"}
+            className={classeBotao(empresa.financeiro_na_central ? "fantasma" : "secundario", true)}
+          >
+            {empresa.financeiro_na_central ? "Desligar" : "Ligar"}
+          </BotaoAcao>
+        </div>
       )}
       <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
         <span>

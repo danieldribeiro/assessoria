@@ -20,11 +20,13 @@ import {
   diagnosticoDaCentral,
   diagnosticosPublicados,
   empresaDaCentral,
+  financeiroNaCentral,
   perfilAtual,
   type IndicadorComCor,
 } from "@/lib/central";
 import { CATEGORIAS, NOME_COR, type Cor } from "@/lib/dominio";
 import { atrasada, formatarData, formatarPeriodo, formatarValor } from "@/lib/datas";
+import { AbasCentral } from "./abas";
 
 export async function generateMetadata({ params }: PageProps<"/central/[empresa]">) {
   const { empresa } = await params;
@@ -67,9 +69,10 @@ export default async function PaginaCentralEmpresa({ params, searchParams }: Pag
   const { d: escolhido } = await searchParams;
   const perfil = await perfilAtual();
   if (!perfil) notFound();
-  const [empresa, publicados] = await Promise.all([
+  const [empresa, publicados, comFinanceiro] = await Promise.all([
     empresaDaCentral(empresaId, perfil.papel),
     diagnosticosPublicados(empresaId),
+    financeiroNaCentral(empresaId, perfil.papel),
   ]);
   if (!empresa) notFound();
 
@@ -82,7 +85,8 @@ export default async function PaginaCentralEmpresa({ params, searchParams }: Pag
   ]);
 
   const cabecalho = (
-    <div className="mb-8 flex flex-wrap items-center gap-4">
+    <>
+    <div className={cx("flex flex-wrap items-center gap-4", comFinanceiro ? "mb-6" : "mb-8")}>
       <LogoEmpresa nome={empresa.nome} logo={empresa.logo_url} largo className="size-14 text-lg" />
       <div className="min-w-0">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{empresa.nome}</h1>
@@ -113,6 +117,8 @@ export default async function PaginaCentralEmpresa({ params, searchParams }: Pag
         </nav>
       )}
     </div>
+    {comFinanceiro && <AbasCentral empresaId={empresaId} atual="diagnostico" />}
+    </>
   );
 
   if (!d)
