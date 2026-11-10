@@ -24,7 +24,8 @@ export default async function PaginaCentralArquivos({ params, searchParams }: Pa
 
   const hoje = hojeLocal();
   const padrao = competenciaPadrao(hoje);
-  const meses = [0, 1, 2, 3].map((i) => somarMeses(padrao, -i));
+  // O mês corrente vem primeiro: o que é do dia a dia já pode ser mandado antes do fechamento.
+  const meses = [-1, 0, 1, 2, 3].map((i) => somarMeses(padrao, -i));
   const pedido = lerMes(typeof mes === "string" ? mes : undefined);
   const competencia = pedido && meses.includes(pedido) ? pedido : padrao;
   const temLista = dados.itens.some((i) => i.ativo);

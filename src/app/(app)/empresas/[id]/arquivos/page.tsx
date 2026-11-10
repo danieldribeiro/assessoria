@@ -26,7 +26,8 @@ export default async function PaginaArquivosRecebidos({ params, searchParams }: 
 
   const hoje = hojeLocal();
   const padrao = competenciaPadrao(hoje);
-  const meses = [0, 1, 2, 3, 4, 5].map((i) => somarMeses(padrao, -i));
+  // O mês corrente vem primeiro: o que é do dia a dia já pode ser mandado antes do fechamento.
+  const meses = [-1, 0, 1, 2, 3, 4, 5].map((i) => somarMeses(padrao, -i));
   const pedido = lerMes(typeof mes === "string" ? mes : undefined);
   const competencia = pedido ?? padrao;
   if (!meses.includes(competencia)) meses.push(competencia);
