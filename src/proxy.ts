@@ -27,6 +27,8 @@ export async function proxy(request: NextRequest) {
   // Conector do Claude: cada pedido traz o próprio token, sem cookies nem tela de login.
   const caminho = request.nextUrl.pathname;
   if (caminho.startsWith("/api/mcp") || caminho.startsWith("/.well-known/")) return NextResponse.next();
+  // Aviso de "fora do ar": o serviço de monitoramento chama sem login.
+  if (caminho === "/api/saude") return NextResponse.next();
 
   let response = NextResponse.next({ request });
 
