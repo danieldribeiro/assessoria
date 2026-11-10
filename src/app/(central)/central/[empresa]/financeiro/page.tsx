@@ -53,7 +53,7 @@ export default async function PaginaCentralFinanceiro({ params, searchParams }: 
           <p className="mt-1 text-sm text-slate-500">Financeiro organizado pela assessoria. Para corrigir algo, fale com a assessoria.</p>
         </div>
       </div>
-      <AbasCentral empresaId={empresaId} atual="financeiro" />
+      <AbasCentral empresaId={empresaId} atual="financeiro" financeiro />
 
       <nav aria-label="Seções do financeiro" className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <ul className="inline-flex min-w-max gap-1 border-b border-slate-200">

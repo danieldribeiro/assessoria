@@ -97,6 +97,7 @@ async function carregarNomes(supabase: Cliente, eventos: Evento[]) {
     }),
     consultar("fin_contas_caixa", "id, nome", lista, (l) => (nomes[l.id as string] = l.nome as string)),
     consultar("fin_contrapartes", "id, nome", lista, (l) => (nomes[l.id as string] = l.nome as string)),
+    consultar("envios_itens", "id, nome", [...new Set([...lista, ...de("envios_itens")])], (l) => (nomes[l.id as string] = l.nome as string)),
     consultar("achados", "id, titulo", [...new Set([...lista, ...de("achados")])], (l) => (itens[l.id as string] = l.titulo as string)),
     consultar("oportunidades", "id, titulo", [...new Set([...lista, ...de("oportunidades")])], (l) => (itens[l.id as string] = l.titulo as string)),
     consultar("indicadores", "id, nome", de("indicadores"), (l) => (itens[l.id as string] = l.nome as string)),
@@ -187,6 +188,7 @@ export default async function PaginaHistorico({ searchParams }: PageProps<"/hist
               { valor: "diagnosticos", rotulo: "Diagnósticos" },
               { valor: "cadastros", rotulo: "Cadastros e acessos" },
               { valor: "financeiro", rotulo: "Financeiro" },
+              { valor: "arquivos", rotulo: "Arquivos enviados" },
             ]}
           />
         </label>
