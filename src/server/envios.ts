@@ -1,7 +1,7 @@
 "use server";
 
 import { criarCliente } from "@/lib/supabase/server";
-import { LISTA_PADRAO, lerMes, type Frequencia } from "@/lib/envios";
+import { LISTA_PADRAO, lerReferencia, type Frequencia } from "@/lib/envios";
 import { atualizarTelas, exigir, falha, texto } from "@/server/util";
 
 // Mensagens das regras do banco (0014) em português de gente.
@@ -20,12 +20,12 @@ export async function registrarEnvio(
   envio: { itemId: string | null; competencia: string | null; caminho: string; nomeArquivo: string; tamanho: number },
 ) {
   if (!envio.caminho.startsWith(`${empresaId}/`) || envio.caminho.includes("..")) return { erro: "Caminho do arquivo inválido." };
-  const competencia = envio.competencia && lerMes(envio.competencia.slice(0, 7));
+  const competencia = lerReferencia(envio.competencia);
   const supabase = await criarCliente();
   const { error } = await supabase.from("envios_arquivos").insert({
     empresa_id: empresaId,
     item_id: envio.itemId,
-    competencia: competencia || null,
+    competencia,
     caminho: envio.caminho,
     nome_arquivo: envio.nomeArquivo.slice(0, 200),
     tamanho: envio.tamanho,
@@ -55,11 +55,12 @@ export async function salvarItem(empresaId: string, itemId: string | null, dados
   const nome = texto(dados, "nome");
   if (!nome) return { erro: "Informe o nome do item." };
   const frequencia = texto(dados, "frequencia") as Frequencia | null;
-  if (frequencia !== "unica" && frequencia !== "mensal") return { erro: "Escolha se o item é mensal ou só uma vez." };
+  if (frequencia !== "unica" && frequencia !== "semanal" && frequencia !== "mensal") return { erro: "Escolha quando o item é enviado." };
   const supabase = await criarCliente();
   const linha = { nome, dica: texto(dados, "dica"), frequencia };
   if (itemId) {
     const { error } = await supabase.from("envios_itens").update(linha).eq("id", itemId);
+    if (error?.message.includes("envios_frequencia_fixa")) return { erro: "Este item já tem arquivos; para mudar quando é enviado, crie um item novo." };
     if (error) return falha(error);
   } else {
     const { data: ultimo } = await supabase
@@ -84,10 +85,10 @@ export async function definirItemAtivo(itemId: string, ativo: boolean) {
   atualizarTelas();
 }
 
-// Equipe: o item não vale para este mês (ex.: conta sem movimento).
+// Equipe: o item não vale para este mês ou esta semana (ex.: conta sem movimento).
 export async function dispensarItem(empresaId: string, itemId: string, competencia: string, dados: FormData) {
-  const mes = lerMes(competencia.slice(0, 7));
-  if (!mes) return { erro: "Mês inválido." };
+  const mes = lerReferencia(competencia);
+  if (!mes) return { erro: "Mês ou semana inválido." };
   const supabase = await criarCliente();
   const { error } = await supabase
     .from("envios_dispensas")

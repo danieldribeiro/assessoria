@@ -3,7 +3,7 @@ import { ListaDeEnvios, SeletorDeMes, SemLista } from "@/components/envios";
 import { LogoEmpresa } from "@/components/ui";
 import { empresaDaCentral, financeiroNaCentral, perfilAtual } from "@/lib/central";
 import { hoje as hojeLocal } from "@/lib/datas";
-import { competenciaPadrao, lerMes, somarMeses } from "@/lib/envios";
+import { competenciaPadrao, lerMes, semanasRecentes, somarMeses } from "@/lib/envios";
 import { carregarEnvios } from "@/lib/envios-consultas";
 import { AbasCentral } from "../abas";
 
@@ -24,7 +24,8 @@ export default async function PaginaCentralArquivos({ params, searchParams }: Pa
 
   const hoje = hojeLocal();
   const padrao = competenciaPadrao(hoje);
-  const meses = [0, 1, 2, 3].map((i) => somarMeses(padrao, -i));
+  // O mês corrente vem primeiro: o que é do dia a dia já pode ser mandado antes do fechamento.
+  const meses = [-1, 0, 1, 2, 3].map((i) => somarMeses(padrao, -i));
   const pedido = lerMes(typeof mes === "string" ? mes : undefined);
   const competencia = pedido && meses.includes(pedido) ? pedido : padrao;
   const temLista = dados.itens.some((i) => i.ativo);
@@ -46,10 +47,11 @@ export default async function PaginaCentralArquivos({ params, searchParams }: Pa
         <SemLista>A assessoria ainda está montando a sua lista de arquivos. Ela aparece aqui assim que estiver pronta.</SemLista>
       ) : (
         <>
-          <SeletorDeMes meses={meses} atual={competencia} href={(m) => `/central/${empresaId}/arquivos?mes=${m.slice(0, 7)}`} />
           <ListaDeEnvios
             empresaId={empresaId}
             competencia={competencia}
+            semanas={semanasRecentes(hoje, 4)}
+            seletorDeMes={<SeletorDeMes meses={meses} atual={competencia} href={(m) => `/central/${empresaId}/arquivos?mes=${m.slice(0, 7)}`} />}
             hoje={hoje}
             itens={dados.itens}
             arquivos={dados.arquivos}
