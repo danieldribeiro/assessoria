@@ -1,4 +1,4 @@
-import { ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft, KeyRound, LogOut } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Avisos } from "@/components/avisos";
@@ -49,6 +49,9 @@ export default async function LayoutCentral({ children }: LayoutProps<"/central"
           </Link>
           <div className="flex items-center gap-2">
             <BotaoTema className={classeIcone} />
+            <Link href="/central/senha" title="Trocar senha" aria-label="Trocar senha" className={classeIcone}>
+              <KeyRound className="size-4" />
+            </Link>
             <span
               title={perfil.email}
               className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-superficie text-xs font-semibold text-slate-600 ring-1 ring-slate-200"

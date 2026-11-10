@@ -297,8 +297,9 @@ function CentralDaClinica({ empresa }: { empresa: EmpresaDetalhe }) {
           aviso="Acesso liberado"
         >
           <p className="rounded-md bg-marca-50 px-3 py-2 text-sm text-marca-800">
-            A pessoa abre o endereço do sistema, toca em “É dono de clínica? Entre com um link por e-mail” e recebe o
-            link neste e-mail. Ela vê só esta clínica, só os diagnósticos publicados e, se você ligar, o financeiro (só
+            Depois de liberar, crie a conta da pessoa no Supabase com uma senha provisória (Authentication → Users →
+            Add user, com “Auto Confirm User”). Ela entra no sistema com e-mail e senha e troca a senha em “Trocar
+            senha”. Se esquecer, usa “Esqueci minha senha” e recebe um link neste e-mail. Ela vê só esta clínica, só os diagnósticos publicados e, se você ligar, o financeiro (só
             para ver, sem editar nada).
           </p>
           <Campo rotulo="Nome">
