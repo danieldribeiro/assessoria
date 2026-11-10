@@ -1,4 +1,4 @@
-# Assessoria · Sistema interno de diagnóstico
+# AXIS · Sistema da assessoria
 
 Ferramenta interna da assessoria para organizar clientes, diagnósticos, coleta de dados, indicadores, achados, oportunidades e planos de ação.
 

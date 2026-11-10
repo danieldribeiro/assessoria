@@ -6,8 +6,8 @@ import "./globals.css";
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Diagnósticos", template: "%s · Diagnósticos" },
-  description: "Ferramenta interna da assessoria",
+  title: { default: "AXIS", template: "%s · AXIS" },
+  description: "AXIS: diagnósticos e financeiro das empresas atendidas pela assessoria",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

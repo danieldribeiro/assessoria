@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   }
   const uris = corpo.redirect_uris;
   if (!Array.isArray(uris) || !uris.length || uris.length > 10 || !uris.every((u) => typeof u === "string" && retornoPermitido(u))) {
-    return json({ error: "invalid_redirect_uri", error_description: "Endereço de retorno não autorizado pelo Axis." }, 400);
+    return json({ error: "invalid_redirect_uri", error_description: "Endereço de retorno não autorizado pelo AXIS." }, 400);
   }
   return json(
     {

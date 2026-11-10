@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
-// Tokens do conector do Claude: tudo o que o Axis precisa lembrar vai dentro do próprio token, cifrado e assinado
+// Tokens do conector do Claude: tudo o que o AXIS precisa lembrar vai dentro do próprio token, cifrado e assinado
 // (AES-256-GCM) com a chave AXIS_MCP_SEGREDO. Assim não há tabela nova no banco. Trocar a chave na Vercel
 // desconecta o Claude de todas as contas de uma vez.
 

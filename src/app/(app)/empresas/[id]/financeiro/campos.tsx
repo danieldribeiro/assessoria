@@ -234,7 +234,7 @@ export function CamposLancamento({
       <span>
         Juros não segregados
         <span className="block text-xs text-slate-500">
-          Parcela de dívida sem a separação entre principal e juros. O Axis não estima os juros.
+          Parcela de dívida sem a separação entre principal e juros. O AXIS não estima os juros.
         </span>
       </span>
     </label>

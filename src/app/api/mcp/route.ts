@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const token = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
   const acesso = abrir<{ at: string; uid: string }>("acesso", token);
   if (!acesso) {
-    return json({ error: "invalid_token", error_description: "Faça o login no Axis pelo Claude." }, 401, {
+    return json({ error: "invalid_token", error_description: "Faça o login no AXIS pelo Claude." }, 401, {
       "www-authenticate": `Bearer resource_metadata="${origemDe(req)}/.well-known/oauth-protected-resource/api/mcp"`,
     });
   }

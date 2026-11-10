@@ -23,24 +23,24 @@ export function TelaLogin({ modoInicial, erroLink }: { modoInicial: "senha" | "l
         <div aria-hidden className="absolute -bottom-32 -left-24 size-96 rounded-full bg-violet-500/20 blur-3xl" />
         <div className="relative flex items-center gap-2.5">
           <span className="flex size-9 items-center justify-center rounded-lg bg-white/10 text-base font-semibold ring-1 ring-white/20">
-            D
+            A
           </span>
-          <span className="text-base font-semibold">Diagnósticos</span>
+          <span className="text-base font-semibold tracking-wide">AXIS</span>
         </div>
         <div className="relative max-w-md">
           <p className="text-3xl font-semibold leading-tight tracking-tight">
-            Da coleta ao plano de ação, cada diagnóstico no mesmo lugar.
+            Diagnóstico e financeiro da sua empresa no mesmo lugar.
           </p>
-          <p className="mt-4 text-blue-200">Coleta · Análise · Achados · Oportunidades · Plano de ação</p>
+          <p className="mt-4 text-blue-200">Diagnóstico · Indicadores · Financeiro · Plano de ação</p>
         </div>
-        <p className="relative text-sm text-blue-200/80">Ferramenta interna da assessoria</p>
+        <p className="relative text-sm text-blue-200/80">AXIS · sistema da assessoria</p>
       </section>
 
       <section className="flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8">
             <div className="mb-6 flex size-10 items-center justify-center rounded-lg bg-marca-600 text-lg font-semibold text-white lg:hidden">
-              D
+              A
             </div>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
               {modo === "senha" ? "Entrar" : "Entrar com link"}

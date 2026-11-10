@@ -6,7 +6,7 @@ import { clienteAvulso, clienteRegistrado } from "@/lib/mcp/http";
 import { lerPedidoAutorizacao, urlDeRetorno, VALIDADE } from "@/lib/mcp/oauth";
 import { texto } from "@/server/util";
 
-// Login do Claude no Axis. Pede a senha de novo de propósito: cria uma sessão separada da do navegador, que o
+// Login do Claude no AXIS. Pede a senha de novo de propósito: cria uma sessão separada da do navegador, que o
 // Claude renova sozinho sem derrubar o login de quem está usando o site.
 export async function autorizarClaude(_estado: { erro?: string; email?: string } | undefined, dados: FormData) {
   const lido = lerPedidoAutorizacao((k) => texto(dados, k), clienteRegistrado);
