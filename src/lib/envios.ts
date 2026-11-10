@@ -31,18 +31,17 @@ export const EXTENSOES = ["ofx", "pdf", "csv", "xls", "xlsx", "jpg", "jpeg", "pn
 export const ACEITA = EXTENSOES.map((e) => `.${e}`).join(",");
 
 // Lista combinada no kit de entrada de dados. A equipe ativa por clínica e pode ajustar depois.
-// Itens que são conversa ou formulário (contas, regime tributário, responsável) ficam de fora: não são arquivo.
+// Itens que são conversa ou formulário (contas, regime tributário, responsável, telas do sistema odontológico) ficam de fora.
+// O relatório mensal do sistema odontológico entra quando o AXIS souber lê-lo (decisão de 10/11/2026).
 export const LISTA_PADRAO: { nome: string; dica: string; frequencia: Frequencia }[] = [
   { frequencia: "unica", nome: "Saldo de cada conta no dia anterior ao início", dica: "Print ou PDF do extrato daquele dia, um por conta." },
   { frequencia: "unica", nome: "Extratos dos últimos 3 meses de cada conta", dica: "OFX, ou PDF quando o banco não tiver OFX. Um arquivo por conta." },
   { frequencia: "unica", nome: "Faturas dos últimos 3 meses de cada cartão", dica: "PDF baixado no app do cartão." },
   { frequencia: "unica", nome: "Contratos de empréstimos e parcelamentos", dica: "PDF. Se não houver, avise a assessoria." },
   { frequencia: "unica", nome: "Fornecedores principais e dentistas parceiros", dica: "Planilha simples ou lista, com a regra de repasse de cada parceiro." },
-  { frequencia: "unica", nome: "Telas de relatório do sistema odontológico", dica: "Prints das telas de relatório que o sistema oferece." },
   { frequencia: "mensal", nome: "Extrato de cada conta bancária", dica: "OFX do dia 1 ao último dia do mês, um arquivo por conta. No internet banking: Extrato, Exportar ou Salvar como OFX." },
   { frequencia: "mensal", nome: "Fatura de cada cartão de crédito", dica: "PDF de cada fatura que fechou no mês. No app do cartão: Fatura, Baixar PDF." },
   { frequencia: "mensal", nome: "Recebimentos da maquininha", dica: "Planilha (CSV ou XLSX) ou PDF. No portal da adquirente: Vendas ou Recebimentos, Exportar." },
-  { frequencia: "mensal", nome: "Produção e recebimentos do sistema odontológico", dica: "Planilha, de preferência, ou PDF. Sem nome nem CPF de paciente sempre que o sistema permitir." },
   { frequencia: "mensal", nome: "Folha, pró-labore e guias de impostos pagas", dica: "PDF recebido do contador." },
   { frequencia: "mensal", nome: "Repasses a dentistas parceiros e laboratórios", dica: "Planilha ou PDF do controle da clínica." },
   { frequencia: "mensal", nome: "Despesas pagas em dinheiro", dica: "Foto do comprovante ou anotação." },

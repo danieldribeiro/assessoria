@@ -106,8 +106,8 @@ describe("situação de cada item", () => {
 
 describe("lista padrão", () => {
   it("segue o kit: itens de início e mensais, nomes únicos e com dica", () => {
-    expect(LISTA_PADRAO.filter((i) => i.frequencia === "unica")).toHaveLength(6);
-    expect(LISTA_PADRAO.filter((i) => i.frequencia === "mensal")).toHaveLength(7);
+    expect(LISTA_PADRAO.filter((i) => i.frequencia === "unica")).toHaveLength(5);
+    expect(LISTA_PADRAO.filter((i) => i.frequencia === "mensal")).toHaveLength(6);
     expect(new Set(LISTA_PADRAO.map((i) => i.nome)).size).toBe(LISTA_PADRAO.length);
     expect(LISTA_PADRAO.every((i) => i.dica.length > 0)).toBe(true);
   });
