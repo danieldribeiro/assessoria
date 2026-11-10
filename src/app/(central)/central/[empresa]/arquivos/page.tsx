@@ -3,7 +3,7 @@ import { ListaDeEnvios, SeletorDeMes, SemLista } from "@/components/envios";
 import { LogoEmpresa } from "@/components/ui";
 import { empresaDaCentral, financeiroNaCentral, perfilAtual } from "@/lib/central";
 import { hoje as hojeLocal } from "@/lib/datas";
-import { competenciaPadrao, lerMes, somarMeses } from "@/lib/envios";
+import { competenciaPadrao, lerMes, semanasRecentes, somarMeses } from "@/lib/envios";
 import { carregarEnvios } from "@/lib/envios-consultas";
 import { AbasCentral } from "../abas";
 
@@ -47,10 +47,11 @@ export default async function PaginaCentralArquivos({ params, searchParams }: Pa
         <SemLista>A assessoria ainda está montando a sua lista de arquivos. Ela aparece aqui assim que estiver pronta.</SemLista>
       ) : (
         <>
-          <SeletorDeMes meses={meses} atual={competencia} href={(m) => `/central/${empresaId}/arquivos?mes=${m.slice(0, 7)}`} />
           <ListaDeEnvios
             empresaId={empresaId}
             competencia={competencia}
+            semanas={semanasRecentes(hoje, 4)}
+            seletorDeMes={<SeletorDeMes meses={meses} atual={competencia} href={(m) => `/central/${empresaId}/arquivos?mes=${m.slice(0, 7)}`} />}
             hoje={hoje}
             itens={dados.itens}
             arquivos={dados.arquivos}

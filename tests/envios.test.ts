@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   LISTA_PADRAO,
+  inicioDaSemana,
+  lerReferencia,
+  nomeDaSemana,
+  prazoDaSemana,
+  semanaPadrao,
+  semanasRecentes,
   arquivosDoItem,
   caminhoDoArquivo,
   competenciaPadrao,
@@ -107,8 +113,45 @@ describe("situação de cada item", () => {
 describe("lista padrão", () => {
   it("segue o kit: itens de início e mensais, nomes únicos e com dica", () => {
     expect(LISTA_PADRAO.filter((i) => i.frequencia === "unica")).toHaveLength(5);
-    expect(LISTA_PADRAO.filter((i) => i.frequencia === "mensal")).toHaveLength(6);
+    expect(LISTA_PADRAO.filter((i) => i.frequencia === "semanal").map((i) => i.nome)).toEqual([
+      "Extrato de cada conta bancária",
+      "Recebimentos da maquininha",
+    ]);
+    expect(LISTA_PADRAO.filter((i) => i.frequencia === "mensal")).toHaveLength(4);
     expect(new Set(LISTA_PADRAO.map((i) => i.nome)).size).toBe(LISTA_PADRAO.length);
     expect(LISTA_PADRAO.every((i) => i.dica.length > 0)).toBe(true);
+  });
+});
+
+describe("semanas", () => {
+  it("a semana começa na segunda, inclusive vista do domingo", () => {
+    expect(inicioDaSemana("2026-11-10")).toBe("2026-11-09"); // terça
+    expect(inicioDaSemana("2026-11-09")).toBe("2026-11-09"); // segunda
+    expect(inicioDaSemana("2026-11-15")).toBe("2026-11-09"); // domingo
+  });
+  it("na segunda o cliente manda a semana anterior, com prazo até a segunda seguinte", () => {
+    expect(semanaPadrao("2026-11-10")).toBe("2026-11-02");
+    expect(prazoDaSemana("2026-11-02")).toBe("2026-11-09");
+    expect(semanasRecentes("2026-11-10", 3)).toEqual(["2026-11-02", "2026-10-26", "2026-10-19"]);
+  });
+  it("semana que cruza o mês e o ano", () => {
+    expect(nomeDaSemana("2026-10-26")).toBe("26/10 a 01/11");
+    expect(semanaPadrao("2027-01-04")).toBe("2026-12-28");
+  });
+  it("semanal fica atrasado depois da segunda do prazo e dispensa vale por semana", () => {
+    const item = { id: "s", frequencia: "semanal" as const };
+    expect(situacaoDoItem(item, "2026-11-02", [], [], "2026-11-09")).toBe("pendente");
+    expect(situacaoDoItem(item, "2026-11-02", [], [], "2026-11-10")).toBe("atrasado");
+    expect(situacaoDoItem(item, "2026-11-02", [{ item_id: "s", competencia: "2026-11-02" }], [], "2026-11-20")).toBe("recebido");
+    expect(situacaoDoItem(item, "2026-11-02", [], [{ item_id: "s", competencia: "2026-11-02" }], "2026-11-20")).toBe("dispensado");
+    expect(situacaoDoItem(item, "2026-10-26", [], [{ item_id: "s", competencia: "2026-11-02" }], "2026-11-20")).toBe("atrasado");
+  });
+  it("referência aceita só dia 1 ou segunda-feira, em data válida", () => {
+    expect(lerReferencia("2026-11-01")).toBe("2026-11-01");
+    expect(lerReferencia("2026-11-02")).toBe("2026-11-02");
+    expect(lerReferencia("2026-11-04")).toBeNull();
+    expect(lerReferencia("2026-02-30")).toBeNull();
+    expect(lerReferencia("2026-11")).toBeNull();
+    expect(lerReferencia(null)).toBeNull();
   });
 });

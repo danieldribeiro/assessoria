@@ -5,7 +5,7 @@ import { BotaoAcao } from "@/components/controles";
 import { ListaDeEnvios, NovoItem, SeletorDeMes, SemLista } from "@/components/envios";
 import { CabecalhoPagina, LinkBotao, classeBotao } from "@/components/ui";
 import { hoje as hojeLocal } from "@/lib/datas";
-import { LISTA_PADRAO, competenciaPadrao, lerMes, somarMeses } from "@/lib/envios";
+import { LISTA_PADRAO, competenciaPadrao, lerMes, semanasRecentes, somarMeses } from "@/lib/envios";
 import { carregarEnvios, nomesDePessoas } from "@/lib/envios-consultas";
 import { criarCliente } from "@/lib/supabase/server";
 import { ativarListaPadrao } from "@/server/envios";
@@ -58,7 +58,7 @@ export default async function PaginaArquivosRecebidos({ params, searchParams }: 
         <SemLista>O envio de arquivos ainda não foi ativado no banco de dados (migration 0014).</SemLista>
       ) : dados.itens.length === 0 ? (
         <SemLista>
-          <p>Esta clínica ainda não tem lista. A lista padrão tem {LISTA_PADRAO.length} itens do kit de entrada de dados: {LISTA_PADRAO.filter((i) => i.frequencia === "unica").length} para o início do contrato e {LISTA_PADRAO.filter((i) => i.frequencia === "mensal").length} para todo mês. Depois dá para editar, tirar ou incluir itens.</p>
+          <p>Esta clínica ainda não tem lista. A lista padrão tem {LISTA_PADRAO.length} itens do kit de entrada de dados: {LISTA_PADRAO.filter((i) => i.frequencia === "unica").length} para o início do contrato, {LISTA_PADRAO.filter((i) => i.frequencia === "semanal").length} para toda segunda-feira e {LISTA_PADRAO.filter((i) => i.frequencia === "mensal").length} para o fechamento do mês. Depois dá para editar, tirar ou incluir itens.</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <BotaoAcao
               acao={ativarListaPadrao.bind(null, empresa.id)}
@@ -74,10 +74,11 @@ export default async function PaginaArquivosRecebidos({ params, searchParams }: 
         </SemLista>
       ) : (
         <>
-          <SeletorDeMes meses={meses} atual={competencia} href={(m) => `/empresas/${empresa.id}/arquivos?mes=${m.slice(0, 7)}`} />
           <ListaDeEnvios
             empresaId={empresa.id}
             competencia={competencia}
+            semanas={semanasRecentes(hoje, 4)}
+            seletorDeMes={<SeletorDeMes meses={meses} atual={competencia} href={(m) => `/empresas/${empresa.id}/arquivos?mes=${m.slice(0, 7)}`} />}
             hoje={hoje}
             itens={dados.itens}
             arquivos={dados.arquivos}
