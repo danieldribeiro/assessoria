@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, LayoutDashboard, LogOut } from "lucide-react";
+import { Building2, History, LayoutDashboard, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BotaoTema } from "@/components/botao-tema";
@@ -14,6 +14,7 @@ const ITENS = [
     icone: Building2,
     ativo: (p: string) => p.startsWith("/empresas") || p.startsWith("/diagnosticos"),
   },
+  { href: "/historico", rotulo: "Histórico", icone: History, ativo: (p: string) => p.startsWith("/historico") },
 ];
 
 // Barra do topo: saudação à esquerda, menu em pílula no centro, usuário à direita.
