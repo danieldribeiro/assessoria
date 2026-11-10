@@ -6,7 +6,8 @@ import { Botao, Campo, Entrada } from "@/components/ui";
 import { pedirLink } from "@/server/central";
 import { entrar } from "@/server/sessao";
 
-// Equipe entra com senha; o dono da clínica recebe um link por e-mail.
+// Todos entram com e-mail e senha (equipe e clientes). Quem esqueceu a senha recebe um link por e-mail,
+// entra e cria uma senha nova em "Trocar senha".
 export function TelaLogin({ modoInicial, erroLink }: { modoInicial: "senha" | "link"; erroLink: boolean }) {
   const [modo, setModo] = useState(modoInicial);
   const [estado, acao, pendente] = useActionState(entrar, undefined);
@@ -42,12 +43,12 @@ export function TelaLogin({ modoInicial, erroLink }: { modoInicial: "senha" | "l
               D
             </div>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              {modo === "senha" ? "Entrar" : "Central da clínica"}
+              {modo === "senha" ? "Entrar" : "Entrar com link"}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
               {modo === "senha"
-                ? "Acesso da equipe da assessoria"
-                : "Receba no seu e-mail um link para entrar, sem senha."}
+                ? "Use o e-mail e a senha que a assessoria cadastrou para você."
+                : "Esqueceu a senha? Receba no seu e-mail um link para entrar. Depois, crie uma senha nova em “Trocar senha”."}
             </p>
           </div>
           {modo === "senha" ? (
@@ -75,7 +76,7 @@ export function TelaLogin({ modoInicial, erroLink }: { modoInicial: "senha" | "l
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">
               <MailCheck className="mb-2 size-6" />
               Se este e-mail tiver acesso, o link chega em instantes. Abra o e-mail neste aparelho e toque em “Entrar”.
-              Confira também a caixa de spam.
+              Confira também a caixa de spam. Ao entrar, crie uma senha nova em “Trocar senha”.
             </div>
           ) : (
             <form action={pedir} className="space-y-4">
@@ -97,7 +98,7 @@ export function TelaLogin({ modoInicial, erroLink }: { modoInicial: "senha" | "l
             onClick={() => setModo(modo === "senha" ? "link" : "senha")}
             className="mt-6 w-full text-center text-sm text-slate-500 hover:text-slate-900"
           >
-            {modo === "senha" ? "É dono de clínica? Entre com um link por e-mail" : "Sou da equipe da assessoria"}
+            {modo === "senha" ? "Esqueci minha senha" : "Voltar e entrar com senha"}
           </button>
         </div>
       </section>
