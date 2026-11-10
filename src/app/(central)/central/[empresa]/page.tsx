@@ -117,7 +117,7 @@ export default async function PaginaCentralEmpresa({ params, searchParams }: Pag
         </nav>
       )}
     </div>
-    {comFinanceiro && <AbasCentral empresaId={empresaId} atual="diagnostico" />}
+    <AbasCentral empresaId={empresaId} atual="diagnostico" financeiro={comFinanceiro} />
     </>
   );
 

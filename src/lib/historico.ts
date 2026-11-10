@@ -18,6 +18,7 @@ export const GRUPOS = {
   diagnosticos: ["diagnosticos", "solicitacoes", "indicadores", "achados", "oportunidades", "acoes"],
   cadastros: ["empresas", "contatos", "acessos_central", "perfis", "assessoria"],
   financeiro: ["fin_lancamentos", "fin_contas"],
+  arquivos: ["envios_arquivos", "envios_itens", "envios_dispensas"],
 } as const;
 export type Grupo = keyof typeof GRUPOS;
 
@@ -35,6 +36,9 @@ export const ROTULO_TABELA: Record<string, string> = {
   assessoria: "Dados da assessoria",
   fin_lancamentos: "Lançamento",
   fin_contas: "Conta do plano",
+  envios_arquivos: "Arquivo enviado",
+  envios_itens: "Item da lista de arquivos",
+  envios_dispensas: "Arquivo dispensado no mês",
 };
 
 export const ROTULO_ACAO: Record<string, string> = {
@@ -70,6 +74,7 @@ export function doFinanceiro(
 const OCULTOS = new Set([
   "id", "empresa_id", "diagnostico_id", "criado_em", "criado_por", "atualizado_em", "ordem", "origem_tipo", "origem_id",
   "compra_id", "fatura_id", "cancelado_em", "origem_modelo", "codigo_municipio",
+  "caminho", "enviado_em", "enviado_por", "por", "em",
 ]);
 
 const ROTULO_CAMPO: Record<string, string> = {
@@ -94,6 +99,8 @@ const ROTULO_CAMPO: Record<string, string> = {
   dre_secao: "Linha do DRE", custo_cmv: "Custo (CMV)", ativa: "Ativa", segmento: "Segmento", cnpj: "CNPJ",
   razao_social: "Razão social", nome_fantasia: "Nome fantasia", responsaveis_area: "Responsáveis por área",
   versao_metodologia: "Versão da metodologia", pasta_url: "Pasta", achado_id: "Achado", oportunidade_id: "Oportunidade",
+  item_id: "Item", competencia: "Mês de referência", nome_arquivo: "Arquivo", tamanho: "Tamanho (bytes)",
+  frequencia: "Frequência", dica: "Como tirar o arquivo", ativo: "Na lista", motivo: "Motivo",
 };
 
 export function rotuloCampo(campo: string) {
@@ -178,6 +185,10 @@ export function nomeDaLinha(tabela: string, l: Record<string, unknown> | null | 
       return s(l.item);
     case "acessos_central":
       return s(l.email);
+    case "envios_arquivos":
+      return s(l.nome_arquivo);
+    case "envios_dispensas":
+      return typeof l.competencia === "string" ? `Mês ${l.competencia.slice(5, 7)}/${l.competencia.slice(0, 4)}` : null;
     case "assessoria":
       return s(l.nome_fantasia) ?? s(l.razao_social);
     case "fin_contas":

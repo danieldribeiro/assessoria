@@ -1,15 +1,24 @@
-import { FileText, Wallet } from "lucide-react";
+import { FileText, Upload, Wallet } from "lucide-react";
 import Link from "next/link";
 import { cx } from "@/components/ui";
 
-// Diagnóstico e Financeiro na central. Só aparece quando o financeiro está ligado para a clínica.
-export function AbasCentral({ empresaId, atual }: { empresaId: string; atual: "diagnostico" | "financeiro" }) {
+// Seções da central. O Financeiro só aparece quando está ligado para a clínica.
+export function AbasCentral({
+  empresaId,
+  atual,
+  financeiro,
+}: {
+  empresaId: string;
+  atual: "diagnostico" | "financeiro" | "arquivos";
+  financeiro: boolean;
+}) {
   const abas = [
     { chave: "diagnostico", nome: "Diagnóstico", href: `/central/${empresaId}`, icone: FileText },
-    { chave: "financeiro", nome: "Financeiro", href: `/central/${empresaId}/financeiro`, icone: Wallet },
-  ] as const;
+    ...(financeiro ? [{ chave: "financeiro", nome: "Financeiro", href: `/central/${empresaId}/financeiro`, icone: Wallet }] : []),
+    { chave: "arquivos", nome: "Arquivos", href: `/central/${empresaId}/arquivos`, icone: Upload },
+  ];
   return (
-    <nav aria-label="Seções da central" className="mb-6 inline-flex gap-1 rounded-xl bg-slate-100 p-1">
+    <nav aria-label="Seções da central" className="mb-6 inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">
       {abas.map((a) => {
         const ativa = a.chave === atual;
         return (
@@ -18,7 +27,7 @@ export function AbasCentral({ empresaId, atual }: { empresaId: string; atual: "d
             href={a.href}
             aria-current={ativa ? "page" : undefined}
             className={cx(
-              "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
               ativa ? "bg-superficie text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800",
             )}
           >
