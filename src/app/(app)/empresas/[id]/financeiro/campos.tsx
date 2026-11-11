@@ -516,8 +516,9 @@ export function CamposCartao({ cartao, caixas, comFaturas }: { cartao?: Cartao; 
 
 export type OpcaoCartao = Opcao & Pick<Cartao, "dia_fechamento" | "dia_vencimento">;
 
-// Compra no cartão: cada parcela vira um lançamento previsto na fatura do mês, com a competência da compra. A
-// fatura da primeira parcela sai do dia de fechamento, mas pode ser escolhida (compra lançada atrasada, por exemplo).
+// Compra no cartão: cada parcela vira um lançamento previsto na fatura do mês. A competência é o mês da compra,
+// salvo se outro for escolhido (mercadoria comprada em novembro que chega em dezembro entra no Resultado de
+// dezembro). A fatura da primeira parcela sai do dia de fechamento, mas pode ser escolhida (compra lançada atrasada).
 export function CamposCompraCartao({ cartoes, contas, contrapartes }: { cartoes: OpcaoCartao[]; contas: Opcao[]; contrapartes?: Opcao[] | null }) {
   const [cartao, setCartao] = useState(cartoes.length === 1 ? cartoes[0].valor : "");
   const [dataCompra, setDataCompra] = useState(hoje());
@@ -525,6 +526,8 @@ export function CamposCompraCartao({ cartoes, contas, contrapartes }: { cartoes:
   const [primeira, setPrimeira] = useState("");
   const [direcao, setDirecao] = useState("saida");
   const [total, setTotal] = useState("");
+  // Mês da competência (AAAA-MM); vazio = mês da compra, e o banco usa a própria data da compra.
+  const [competencia, setCompetencia] = useState("");
   const totalC = centavosDe(total);
   const escolhido = cartoes.find((c) => c.valor === cartao);
   const automatica = escolhido && /^\d{4}-\d{2}-\d{2}$/.test(dataCompra) ? referenciaDaCompra(escolhido, dataCompra) : null;
@@ -533,6 +536,11 @@ export function CamposCompraCartao({ cartoes, contas, contrapartes }: { cartoes:
   const nomeMes = (m: string) => `${MESES[Number(m.slice(5)) - 1].toLowerCase()}/${m.slice(0, 4)}`;
   const curto = (m: string) => `${MESES[Number(m.slice(5)) - 1].slice(0, 3).toLowerCase()}/${m.slice(0, 4)}`;
   const meses = automatica ? Array.from({ length: 7 }, (_, i) => somarMeses(automatica, i - 2)) : [];
+  const mesCompra = /^\d{4}-\d{2}-\d{2}$/.test(dataCompra) ? dataCompra.slice(0, 7) : null;
+  const competenciaValida = competencia && competencia !== mesCompra ? competencia : "";
+  const mesesCompetencia = mesCompra ? Array.from({ length: 6 }, (_, i) => somarMeses(mesCompra, i - 2)).filter((m) => m !== mesCompra) : [];
+  if (competenciaValida && !mesesCompetencia.includes(competenciaValida)) mesesCompetencia.push(competenciaValida);
+  const mesResultado = competenciaValida || mesCompra;
 
   return (
     <>
@@ -550,14 +558,24 @@ export function CamposCompraCartao({ cartoes, contas, contrapartes }: { cartoes:
         </Campo>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Campo rotulo="Data da compra" dica="É a competência: entra no Resultado deste mês">
+        <Campo rotulo="Data da compra" dica="Decide a fatura, pelo dia de fechamento">
           <Entrada name="data_compra" type="date" required value={dataCompra} onChange={(e) => (setDataCompra(e.target.value), setPrimeira(""))} />
         </Campo>
-        <Campo rotulo="Valor total" dica={DICA_MOEDA}>
-          <EntradaMoeda name="valor_total" required value={total} onChange={setTotal} />
+        <Campo rotulo="Competência" dica="Mês em que entra no Resultado (DRE)">
+          <input type="hidden" name="data_competencia" value={competenciaValida ? `${competenciaValida}-01` : ""} />
+          <Selecao
+            aria-label="Mês da competência"
+            value={competenciaValida}
+            onChange={(e) => setCompetencia(e.target.value)}
+            vazio={mesCompra ? `Mês da compra: ${curto(mesCompra)}` : "Mês da compra"}
+            opcoes={mesesCompetencia.map((m) => ({ valor: m, rotulo: `${MESES[Number(m.slice(5)) - 1]} ${m.slice(0, 4)}` }))}
+          />
         </Campo>
       </div>
       <div className="grid grid-cols-2 gap-3">
+        <Campo rotulo="Valor total" dica={DICA_MOEDA}>
+          <EntradaMoeda name="valor_total" required value={total} onChange={setTotal} />
+        </Campo>
         {direcao === "saida" ? (
           <Campo rotulo="Parcelas">
             <Entrada name="parcelas" type="number" min={1} max={48} required value={parcelas} onChange={(e) => setParcelas(e.target.value)} />
@@ -565,7 +583,8 @@ export function CamposCompraCartao({ cartoes, contas, contrapartes }: { cartoes:
         ) : (
           <input type="hidden" name="parcelas" value="1" />
         )}
-        <Campo rotulo={n > 1 ? "Fatura da 1ª parcela" : "Fatura"} dica="Automática: pelo dia de fechamento">
+      </div>
+      <Campo rotulo={n > 1 ? "Fatura da 1ª parcela" : "Fatura"} dica="Automática: pelo dia de fechamento">
           <Selecao
             name="primeira_fatura"
             value={primeira}
@@ -574,13 +593,14 @@ export function CamposCompraCartao({ cartoes, contas, contrapartes }: { cartoes:
             opcoes={meses.filter((m) => m !== automatica).map((m) => ({ valor: m, rotulo: `Vence em ${curto(m)}` }))}
           />
         </Campo>
-      </div>
       {inicio && totalC !== null && totalC >= n && (
         <p className="rounded-md bg-marca-50 px-3 py-2 text-xs text-marca-800">
           {n === 1
             ? `Entra na fatura que vence em ${nomeMes(inicio)}`
             : `${n} parcelas de ${formatar(Math.floor(totalC / n))}${totalC % n ? ` (a primeira, ${formatar(Math.floor(totalC / n) + (totalC % n))})` : ""}, nas faturas de ${nomeMes(inicio)} a ${nomeMes(somarMeses(inicio, n - 1))}`}
-          . Fica prevista até a fatura ser paga; o Resultado mostra o valor cheio no mês da compra.
+          . Fica prevista até a fatura ser paga; o Resultado mostra o valor cheio
+          {mesResultado ? ` em ${nomeMes(mesResultado)}` : " no mês da competência"}
+          {competenciaValida ? " (competência escolhida)." : ", o mês da compra."}
         </p>
       )}
       <Campo rotulo="Descrição" dica={n > 1 ? "Cada parcela recebe (1/3), (2/3)… no fim" : undefined}>
