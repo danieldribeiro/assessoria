@@ -1,7 +1,7 @@
 // Painel e resultado gerencial: regras puras, sem banco (docs/axis-financeiro/evolucao-modulo-financeiro.md, seção 3).
 // Cada parte do rateio de um lançamento vira uma "parcela", contada uma vez só, em centavos e com sinal:
 // entrada soma, saída subtrai. Os totais da DRE, do painel e da lista de lançamentos saem todos das mesmas parcelas.
-import { SECOES_DRE, type ContaPlano, type Direcao, type Lancamento } from "@/lib/financeiro/dominio";
+import { SECOES_DRE, compararCodigo, type ContaPlano, type Direcao, type Lancamento } from "@/lib/financeiro/dominio";
 
 // Competência: data de competência, previstos e realizados (regra C6). Caixa: data do pagamento, só realizados.
 export type Base = "competencia" | "caixa";
@@ -94,20 +94,57 @@ const somar = (v: number[]) => v.reduce((a, b) => a + b, 0);
 // ---------------------------------------------------------------------------
 
 export type LinhaContaDre = { id: string; codigo: string; nome: string; valores: number[]; total: number };
+// Subgrupo do plano (ex.: 3.1 Despesas de pessoal) com o subtotal das suas contas nesta linha da DRE.
+export type SubgrupoDre = LinhaContaDre & { contas: LinhaContaDre[] };
+export type ItemDre = ({ tipo: "conta" } & LinhaContaDre) | ({ tipo: "subgrupo" } & SubgrupoDre);
 export type LinhaDre = {
   numero: number;
   nome: string;
   calculada: boolean;
   valores: number[];
   total: number;
-  contas: LinhaContaDre[];
+  contas: LinhaContaDre[]; // lista plana, por código
+  itens: ItemDre[]; // as mesmas contas, agrupadas pelos subgrupos do plano
 };
 export type Dre = { meses: string[]; linhas: LinhaDre[]; foraDaDre: number };
 
 // Linhas calculadas: cada uma soma a anterior com as seções entre elas.
 const CALCULADAS: Record<number, number[]> = { 4: [1, 2, 3], 7: [4, 5, 6], 9: [7, 8], 12: [9, 10, 11] };
 
-export function montarDre(lista: Parcela[], meses: string[]): Dre {
+// Subgrupo de uma conta: o grupo logo acima dela, quando esse grupo não é de primeiro nível. Os grupos de primeiro
+// nível (Receitas, Despesas fixas...) já são representados pelas próprias linhas da DRE.
+function subgrupoDe(conta: ContaPlano, plano: Map<string, ContaPlano>) {
+  const pai = conta.conta_pai_id ? plano.get(conta.conta_pai_id) : undefined;
+  return pai && pai.conta_pai_id ? pai : null;
+}
+
+function agrupar(contas: LinhaContaDre[], porId: Map<string, ContaPlano>, plano: Map<string, ContaPlano>): ItemDre[] {
+  const itens: ItemDre[] = [];
+  const subgrupos = new Map<string, { tipo: "subgrupo" } & SubgrupoDre>();
+  for (const c of contas) {
+    const g = subgrupoDe(porId.get(c.id)!, plano);
+    if (!g) {
+      itens.push({ tipo: "conta", ...c });
+      continue;
+    }
+    let item = subgrupos.get(g.id);
+    if (!item) {
+      item = { tipo: "subgrupo", id: g.id, codigo: g.codigo, nome: g.nome, valores: c.valores.map(() => 0), total: 0, contas: [] };
+      subgrupos.set(g.id, item);
+      itens.push(item);
+    }
+    item.contas.push(c);
+  }
+  for (const g of subgrupos.values()) {
+    g.valores = g.valores.map((_, i) => reais(somar(g.contas.map((c) => Math.round(c.valores[i] * 100)))));
+    g.total = reais(somar(g.contas.map((c) => Math.round(c.total * 100))));
+  }
+  return itens.sort((a, b) => compararCodigo(a.codigo, b.codigo));
+}
+
+// `plano` (todas as contas da empresa, inclusive grupos) permite mostrar os subgrupos; sem ele, `itens` é a lista plana.
+export function montarDre(lista: Parcela[], meses: string[], plano: ContaPlano[] = []): Dre {
+  const mapaPlano = new Map(plano.map((c) => [c.id, c]));
   const indice = new Map(meses.map((m, i) => [m, i]));
   const vazio = () => meses.map(() => 0);
   const porSecao = new Map<number, number[]>();
@@ -150,7 +187,9 @@ export function montarDre(lista: Parcela[], meses: string[]): Dre {
         valores: c.valores.map(reais),
         total: reais(somar(c.valores)),
       }));
-    return { numero: s.numero, nome: s.nome, calculada: !s.recebe, valores: v.map(reais), total: reais(somar(v)), contas };
+    const porId = new Map([...porConta.values()].map((c) => [c.conta.id, c.conta]));
+    const itens = agrupar(contas, porId, mapaPlano);
+    return { numero: s.numero, nome: s.nome, calculada: !s.recebe, valores: v.map(reais), total: reais(somar(v)), contas, itens };
   });
   return { meses, linhas, foraDaDre: reais(fora) };
 }

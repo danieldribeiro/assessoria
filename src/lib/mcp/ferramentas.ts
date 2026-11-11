@@ -216,7 +216,7 @@ export const FERRAMENTAS: Ferramenta[] = [
       const b = await base(args.empresa_id as string);
       const lancamentos = await carregarLancamentos(b.empresa.id, p.inicio, p.fim, "competencia");
       const lista = parcelas(lancamentos, b.contas, "competencia", {}, p.inicio, p.fim);
-      const dre = montarDre(lista, p.meses);
+      const dre = montarDre(lista, p.meses, b.contas);
       return {
         empresa: b.empresa.nome,
         periodo: { inicio: p.inicio, fim: p.fim },
@@ -228,6 +228,11 @@ export const FERRAMENTAS: Ferramenta[] = [
           por_mes: l.valores,
           total: l.total,
           contas: l.contas.map((c) => ({ codigo: c.codigo, nome: c.nome, por_mes: c.valores, total: c.total })),
+          subgrupos: l.itens.flatMap((i) =>
+            i.tipo === "subgrupo"
+              ? [{ codigo: i.codigo, nome: i.nome, por_mes: i.valores, total: i.total, contas: i.contas.map((c) => c.codigo) }]
+              : [],
+          ),
         })),
         fora_da_dre: dre.foraDaDre,
       };
