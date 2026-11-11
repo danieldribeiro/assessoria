@@ -585,6 +585,8 @@ export async function lancarNoCartao(dados: FormData) {
     p_rateios: rateio.linhas,
     p_contraparte: texto(dados, "contraparte_id"),
     p_observacoes: texto(dados, "observacoes"),
+    // Vazio: o banco usa a data da compra como competência.
+    p_competencia: data(dados, "data_competencia"),
   });
   if (error) return falhaFinanceira(error);
   atualizarTelas();
