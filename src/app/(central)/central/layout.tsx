@@ -7,7 +7,7 @@ import { iniciaisPessoa } from "@/components/responsaveis";
 import { assessoriaDaCentral, perfilAtual } from "@/lib/central";
 import { sair } from "@/server/sessao";
 
-export const metadata = { title: { default: "Central da clínica", template: "%s · Central da clínica" } };
+export const metadata = { title: { default: "Central · AXIS", template: "%s · AXIS" } };
 
 const classeIcone =
   "flex size-9 items-center justify-center rounded-full text-slate-500 hover:bg-superficie hover:text-slate-900 hover:ring-1 hover:ring-slate-200";

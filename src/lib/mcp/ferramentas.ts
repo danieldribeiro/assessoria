@@ -60,7 +60,7 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     name: "listar_empresas",
     title: "Listar empresas",
-    description: "Lista as empresas (clínicas) cadastradas no Axis que esta conta enxerga, com id, nome, segmento e cidade.",
+    description: "Lista as empresas (clínicas) cadastradas no AXIS que esta conta enxerga, com id, nome, segmento e cidade.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     async executar() {
       const supabase = await criarCliente();

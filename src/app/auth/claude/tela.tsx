@@ -13,7 +13,7 @@ export function TelaClaude({ campos, cancelar }: { campos: Record<string, string
         <div className="mb-6 flex size-10 items-center justify-center rounded-lg bg-marca-600 text-white">
           <ShieldCheck className="size-5" />
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Conectar o Claude ao Axis</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Conectar o Claude ao AXIS</h1>
         <p className="mt-2 text-sm text-slate-500">
           O Claude vai poder <b>consultar</b> empresas, diagnósticos e o financeiro que a sua conta enxerga.
         </p>
@@ -34,7 +34,7 @@ export function TelaClaude({ campos, cancelar }: { campos: Record<string, string
           <Campo rotulo="E-mail">
             <Entrada name="email" type="email" autoComplete="email" defaultValue={estado?.email} required autoFocus className="h-11" />
           </Campo>
-          <Campo rotulo="Senha do Axis">
+          <Campo rotulo="Senha do AXIS">
             <Entrada name="senha" type="password" autoComplete="current-password" required className="h-11" />
           </Campo>
           {estado?.erro && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{estado.erro}</p>}

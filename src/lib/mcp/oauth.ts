@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 
 export const ESCOPO = "axis.leitura";
 
-// Para onde o Axis aceita devolver o login: o app do Claude e, para testes no computador, endereços locais.
+// Para onde o AXIS aceita devolver o login: o app do Claude e, para testes no computador, endereços locais.
 export function retornoPermitido(uri: string) {
   let u: URL;
   try {
@@ -33,7 +33,7 @@ export function metadadosRecurso(origem: string) {
     authorization_servers: [origem],
     scopes_supported: [ESCOPO],
     bearer_methods_supported: ["header"],
-    resource_name: "Axis",
+    resource_name: "AXIS",
   };
 }
 

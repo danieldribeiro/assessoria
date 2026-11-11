@@ -25,7 +25,7 @@ export type Resposta = { jsonrpc: "2.0"; id: string | number | null; result?: un
 export class ErroDeUso extends Error {}
 
 const INSTRUCOES =
-  "Dados do Axis, o sistema da assessoria: empresas (clínicas), diagnósticos e financeiro gerencial. Só leitura. " +
+  "Dados do AXIS, o sistema da assessoria: empresas (clínicas), diagnósticos e financeiro gerencial. Só leitura. " +
   "Comece por listar_empresas para achar o id da empresa. Valores em reais; datas no formato AAAA-MM-DD. " +
   "O que aparece depende das permissões da conta que fez o login.";
 
@@ -78,7 +78,7 @@ export async function tratarMensagem(
         result: {
           protocolVersion: versao,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "axis", title: "Axis", version: "1.0.0" },
+          serverInfo: { name: "axis", title: "AXIS", version: "1.0.0" },
           instructions: INSTRUCOES,
         },
       };
@@ -111,7 +111,7 @@ export async function tratarMensagem(
         return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(dados) }], isError: false } };
       } catch (e) {
         registrar?.(ferramenta.name, args, false);
-        const texto = e instanceof ErroDeUso ? e.message : "Não foi possível consultar o Axis agora. Tente de novo em instantes.";
+        const texto = e instanceof ErroDeUso ? e.message : "Não foi possível consultar o AXIS agora. Tente de novo em instantes.";
         if (!(e instanceof ErroDeUso)) console.error("[mcp] erro na ferramenta", ferramenta.name, e);
         return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: texto }], isError: true } };
       }

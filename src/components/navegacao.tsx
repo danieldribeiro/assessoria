@@ -61,8 +61,8 @@ export function Navegacao({
     <header className="nao-imprimir sticky top-0 z-20 border-b border-slate-200/70 bg-fundo/85 backdrop-blur">
       <div className="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto] items-center gap-4 px-4 sm:px-8 md:grid-cols-[1fr_auto_1fr]">
         <Link href="/" className="flex min-w-0 items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-marca-600 text-sm font-semibold text-white shadow-sm shadow-marca-600/30">
-            D
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-marca-600 text-sm font-semibold text-white shadow-sm shadow-marca-600/30" title="AXIS">
+            A
           </span>
           <span className="min-w-0 leading-tight">
             <span className="block text-xs text-slate-500">{saudacao},</span>
