@@ -4,7 +4,7 @@ import { CabecalhoCartao, Cartao, Vazio, cx, classeTabela as t } from "@/compone
 import { formatarValor } from "@/lib/datas";
 import { carregarLancamentos } from "@/lib/financeiro/consultas";
 import type { ContaCaixa, ContaPlano } from "@/lib/financeiro/dominio";
-import { SECOES_DESPESA, montarDre, parcelas, variacao, type Filtros } from "@/lib/financeiro/painel";
+import { SECOES_DESPESA, montarDre, parcelas, variacao, type Filtros, type LinhaContaDre } from "@/lib/financeiro/painel";
 import { textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
 import { FiltroPeriodo } from "./filtro";
 import { FiltroCaixa, filtrosAtivos, linkLancamentos } from "./painel";
@@ -34,7 +34,7 @@ export async function AbaResultado({
   const { inicio: inicioAnterior, fim: fimAnterior } = periodo.anterior;
   const lancamentos = await carregarLancamentos(empresa.id, inicioAnterior, fim, "competencia");
   const filtro = { caixa: filtros.caixa };
-  const dre = montarDre(parcelas(lancamentos, contas, "competencia", filtro, inicio, fim), meses);
+  const dre = montarDre(parcelas(lancamentos, contas, "competencia", filtro, inicio, fim), meses, contas);
   const dreAnterior = montarDre(
     parcelas(lancamentos, contas, "competencia", filtro, inicioAnterior, fimAnterior),
     periodo.anterior.meses,
@@ -110,22 +110,42 @@ export async function AbaResultado({
                       {v.diferenca === 0 ? "—" : v.percentual === null ? moeda(v.diferenca) : `${v.diferenca > 0 ? "+" : "−"}${percentual.format(Math.abs(v.percentual))}`}
                     </td>
                   </tr>,
-                  ...l.contas.map((c) => (
-                    <tr key={c.id} className="border-b border-slate-100/70 text-slate-600">
-                      <td className="py-1.5 pl-12 pr-5 text-sm">
-                        <Link href={link(c.id, l.numero)} className="hover:text-marca-700 hover:underline">
-                          <span className="mr-2 text-xs tabular-nums text-slate-400">{c.codigo}</span>
-                          {c.nome}
-                        </Link>
-                      </td>
-                      {mostrarMeses && c.valores.map((x, i) => <Valor key={i} valor={x} pequeno />)}
-                      <Valor valor={c.total} pequeno />
-                      <td className="whitespace-nowrap px-5 py-1.5 text-right text-xs tabular-nums text-slate-400">
-                        {base ? percentual.format(proporcao(c.total)) : "—"}
-                      </td>
-                      <td colSpan={2} />
-                    </tr>
-                  )),
+                  ...l.itens.flatMap((item) => {
+                    const conta = (c: LinhaContaDre, recuo: string) => (
+                      <tr key={c.id} className="border-b border-slate-100/70 text-slate-600">
+                        <td className={cx("py-1.5 pr-5 text-sm", recuo)}>
+                          <Link href={link(c.id, l.numero)} className="hover:text-marca-700 hover:underline">
+                            <span className="mr-2 text-xs tabular-nums text-slate-400">{c.codigo}</span>
+                            {c.nome}
+                          </Link>
+                        </td>
+                        {mostrarMeses && c.valores.map((x, i) => <Valor key={i} valor={x} pequeno />)}
+                        <Valor valor={c.total} pequeno />
+                        <td className="whitespace-nowrap px-5 py-1.5 text-right text-xs tabular-nums text-slate-400">
+                          {base ? percentual.format(proporcao(c.total)) : "—"}
+                        </td>
+                        <td colSpan={2} />
+                      </tr>
+                    );
+                    if (item.tipo === "conta") return [conta(item, "pl-12")];
+                    return [
+                      <tr key={item.id} className="border-b border-slate-100/70 text-slate-800">
+                        <td className="py-1.5 pl-12 pr-5 text-sm font-medium">
+                          <Link href={link(item.id, l.numero)} className="hover:text-marca-700 hover:underline">
+                            <span className="mr-2 text-xs tabular-nums text-slate-400">{item.codigo}</span>
+                            {item.nome}
+                          </Link>
+                        </td>
+                        {mostrarMeses && item.valores.map((x, i) => <Valor key={i} valor={x} pequeno negrito />)}
+                        <Valor valor={item.total} pequeno negrito />
+                        <td className="whitespace-nowrap px-5 py-1.5 text-right text-xs font-medium tabular-nums text-slate-500">
+                          {base ? percentual.format(proporcao(item.total)) : "—"}
+                        </td>
+                        <td colSpan={2} />
+                      </tr>,
+                      ...item.contas.map((c) => conta(c, "pl-20")),
+                    ];
+                  }),
                 ];
               })}
             </tbody>

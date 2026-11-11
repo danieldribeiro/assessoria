@@ -194,6 +194,35 @@ describe("DRE gerencial", () => {
     expect(linha(9).valores.reduce((a, b) => a + b, 0)).toBeCloseTo(linha(9).total, 10);
   });
 
+  it("agrupa as contas pelos subgrupos do plano, com subtotal", () => {
+    const plano2 = [
+      ...plano,
+      conta("fixas", "6", null, { tipo: "grupo" }),
+      conta("pessoal", "6.1", "fixas", { tipo: "grupo", nome: "Despesas de pessoal" }),
+      conta("salarios", "6.1.1", "pessoal", { dre_secao: 8 }),
+      conta("fgts", "6.1.2", "pessoal", { dre_secao: 8 }),
+      conta("ocupacao", "6.2", "fixas", { tipo: "grupo", nome: "Despesas de ocupação" }),
+      conta("energia", "6.2.1", "ocupacao", { dre_secao: 8 }),
+    ];
+    const l = [
+      lanc("saida", [["salarios", 1000], ["fgts", 80.1]], { competencia: "2026-09-10" }),
+      lanc("saida", [["energia", 200.2]], { competencia: "2026-10-10" }),
+    ];
+    const d = montarDre(parcelas(l, plano2, "competencia", {}, "2026-09-01", "2026-10-31"), meses, plano2);
+    const l8 = d.linhas.find((x) => x.numero === 8)!;
+    expect(l8.itens.map((i) => [i.tipo, i.codigo, i.total])).toEqual([
+      ["subgrupo", "6.1", -1080.1],
+      ["subgrupo", "6.2", -200.2],
+    ]);
+    const pessoal = l8.itens[0];
+    expect(pessoal.tipo === "subgrupo" && pessoal.contas.map((c) => c.codigo)).toEqual(["6.1.1", "6.1.2"]);
+    expect(pessoal.nome).toBe("Despesas de pessoal");
+    expect(pessoal.valores).toEqual([-1080.1, 0]);
+    expect(l8.total).toBe(-1280.3);
+    // Contas logo abaixo de um grupo de primeiro nível ficam soltas, como antes.
+    expect(linha(8).itens).toEqual([{ tipo: "conta", ...linha(8).contas[0] }]);
+  });
+
   it("o que fica fora da DRE aparece separado", () => {
     expect(dre.foraDaDre).toBe(5000);
   });
