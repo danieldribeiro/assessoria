@@ -1,4 +1,4 @@
-import { FileText, Upload, Wallet } from "lucide-react";
+import { Building2, FileText, Upload, Wallet } from "lucide-react";
 import Link from "next/link";
 import { cx } from "@/components/ui";
 
@@ -9,13 +9,14 @@ export function AbasCentral({
   financeiro,
 }: {
   empresaId: string;
-  atual: "diagnostico" | "financeiro" | "arquivos";
+  atual: "diagnostico" | "financeiro" | "arquivos" | "dados";
   financeiro: boolean;
 }) {
   const abas = [
     { chave: "diagnostico", nome: "Diagnóstico", href: `/central/${empresaId}`, icone: FileText },
     ...(financeiro ? [{ chave: "financeiro", nome: "Financeiro", href: `/central/${empresaId}/financeiro`, icone: Wallet }] : []),
     { chave: "arquivos", nome: "Arquivos", href: `/central/${empresaId}/arquivos`, icone: Upload },
+    { chave: "dados", nome: "Dados da empresa", href: `/central/${empresaId}/dados`, icone: Building2 },
   ];
   return (
     <nav aria-label="Seções da central" className="mb-6 inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">

@@ -1,6 +1,7 @@
 import {
   ArrowDownRight,
   ArrowUpRight,
+  Building2,
   CircleAlert,
   CircleCheck,
   CircleX,
@@ -17,9 +18,11 @@ import { iniciaisPessoa } from "@/components/responsaveis";
 import { CabecalhoCartao, Cartao, Etiqueta, LogoEmpresa, Vazio, cx } from "@/components/ui";
 import {
   comCores,
+  dadosDaEmpresa,
   diagnosticoDaCentral,
   diagnosticosPublicados,
   empresaDaCentral,
+  faltamDados,
   financeiroNaCentral,
   perfilAtual,
   type IndicadorComCor,
@@ -69,10 +72,11 @@ export default async function PaginaCentralEmpresa({ params, searchParams }: Pag
   const { d: escolhido } = await searchParams;
   const perfil = await perfilAtual();
   if (!perfil) notFound();
-  const [empresa, publicados, comFinanceiro] = await Promise.all([
+  const [empresa, publicados, comFinanceiro, cadastro] = await Promise.all([
     empresaDaCentral(empresaId, perfil.papel),
     diagnosticosPublicados(empresaId),
     financeiroNaCentral(empresaId, perfil.papel),
+    dadosDaEmpresa(empresaId),
   ]);
   if (!empresa) notFound();
 
@@ -118,6 +122,18 @@ export default async function PaginaCentralEmpresa({ params, searchParams }: Pag
       )}
     </div>
     <AbasCentral empresaId={empresaId} atual="diagnostico" financeiro={comFinanceiro} />
+    {faltamDados(cadastro) && (
+      <Link
+        href={`/central/${empresaId}/dados`}
+        className="mb-6 flex items-center gap-3 rounded-xl border border-marca-200 bg-marca-50 px-4 py-3 text-sm text-marca-800 hover:bg-marca-100"
+      >
+        <Building2 className="size-5 shrink-0 text-marca-600" />
+        <span>
+          <strong className="font-semibold">Complete os dados da sua empresa.</strong> CNPJ, endereço e responsável
+          ajudam a assessoria a emitir as notas sem precisar pedir de novo.
+        </span>
+      </Link>
+    )}
     </>
   );
 

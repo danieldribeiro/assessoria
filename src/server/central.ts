@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { criarCliente } from "@/lib/supabase/server";
-import { atualizarTelas, exigir, falha, texto } from "@/server/util";
+import { atualizarTelas, cadastro, exigir, falha, texto } from "@/server/util";
 
 export async function publicarDiagnostico(id: string) {
   const supabase = await criarCliente();
@@ -134,4 +134,30 @@ export async function pedirLink(_estado: { enviado?: boolean; erro?: string } | 
     }
   }
   return { enviado: true };
+}
+
+// O cliente preenche os dados da própria empresa na central (CNPJ, inscrições, endereço, responsável).
+// O banco confere o acesso e grava só os campos do cadastro (migration 0016).
+export async function salvarDadosEmpresa(empresaId: string, _estado: { erro?: string; ok?: boolean } | undefined, dados: FormData) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("central_salvar_dados_empresa", {
+    p_empresa: empresaId,
+    p_dados: {
+      ...cadastro(dados),
+      responsavel: {
+        nome: texto(dados, "responsavel_nome"),
+        cargo: texto(dados, "responsavel_cargo"),
+        telefone: texto(dados, "responsavel_telefone"),
+        email: texto(dados, "responsavel_email")?.toLowerCase() ?? null,
+      },
+    },
+  });
+  if (error) {
+    if (error.code === "22023") return { erro: error.message };
+    if (error.code === "42501") return { erro: "Você não tem acesso a esta empresa." };
+    console.error(error);
+    return { erro: "Não foi possível salvar agora. Tente de novo em alguns minutos." };
+  }
+  atualizarTelas();
+  return { ok: true };
 }
