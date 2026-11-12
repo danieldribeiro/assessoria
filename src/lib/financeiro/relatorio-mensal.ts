@@ -259,7 +259,7 @@ export const REFERENCIAS: Referencia[] = [
 ];
 // Custo total: custos e despesas variáveis e despesas operacionais (linhas 5, 6 e 8), sem pró-labore. Deduções e
 // tributos sobre o faturamento ficam fora, porque a referência de origem não tem imposto sobre a venda.
-export const REFERENCIA_TOTAL = { id: "total", nome: "Custo total (sem pró-labore)", min: 0.6, max: 0.65 };
+export const REFERENCIA_TOTAL = { id: "total", nome: "Custo total", min: 0.6, max: 0.65 };
 const SECOES_CUSTO_TOTAL = [5, 6, 8];
 const SECOES_CATEGORIA = [5, 6, 8];
 
