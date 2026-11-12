@@ -7,6 +7,8 @@ import {
   altasDeDespesa,
   blocosDaEmpresa,
   caixaDoMes,
+  categoriaDaConta,
+  custosReferencia,
   despesasPorGrupo,
   dozeMeses,
   mesDoRelatorio,
@@ -76,7 +78,7 @@ describe("blocos por empresa", () => {
   it("blocos de clínica só para Odontologia", () => {
     expect(blocosDaEmpresa("Odontologia").some((b) => b.id === "cadeiras")).toBe(true);
     expect(blocosDaEmpresa("Alimentação").some((b) => b.id === "cadeiras")).toBe(false);
-    expect(blocosDaEmpresa(null).length).toBe(BLOCOS.length - 3);
+    expect(blocosDaEmpresa(null).length).toBe(BLOCOS.length - 4);
   });
 
   it("blocos fixos estão sempre ligados e futuros desligados", () => {
@@ -205,5 +207,75 @@ describe("previstos que entraram na DRE do mês", () => {
       lanc("2026-09-10", "aluguel", 3000, { situacao: "previsto", data_liquidacao: null }),
     ]);
     expect(previstosNoMes(lista, "2026-10")).toEqual({ receitas: 800, despesas: 3000 });
+  });
+});
+
+describe("custos x referência da assessoria", () => {
+  // Plano no formato do modelo de Odontologia: aluguel e marketing dentro de "Demais despesas operacionais".
+  const P = [
+    conta("receitas", { tipo: "sintetica" as ContaPlano["tipo"], nome: "Receitas" }),
+    conta("vendas", { conta_pai_id: "receitas", dre_secao: 1, nome: "Clínica geral" }),
+    conta("das", { dre_secao: 3, nome: "DAS — Simples Nacional" }),
+    conta("custos", { tipo: "sintetica" as ContaPlano["tipo"], nome: "Custos diretos variáveis" }),
+    conta("mat", { conta_pai_id: "custos", dre_secao: 5, nome: "Materiais odontológicos (CMV/CSV)" }),
+    conta("lab", { conta_pai_id: "custos", dre_secao: 5, nome: "Laboratório protético" }),
+    conta("ops", { tipo: "sintetica" as ContaPlano["tipo"], nome: "Despesas operacionais" }),
+    conta("pes", { conta_pai_id: "ops", tipo: "sintetica" as ContaPlano["tipo"], nome: "Pessoal" }),
+    conta("sal", { conta_pai_id: "pes", dre_secao: 8, nome: "Salários e ordenados da equipe" }),
+    conta("prof", { conta_pai_id: "pes", dre_secao: 8, nome: "Remuneração fixa de profissionais" }),
+    conta("pro", { conta_pai_id: "ops", dre_secao: 8, nome: "Pró-labore dos sócios" }),
+    conta("dem", { conta_pai_id: "ops", tipo: "sintetica" as ContaPlano["tipo"], nome: "Demais despesas operacionais" }),
+    conta("alu", { conta_pai_id: "dem", dre_secao: 8, nome: "Aluguel e condomínio" }),
+    conta("mkt", { conta_pai_id: "dem", dre_secao: 8, nome: "Marketing e publicidade" }),
+    conta("soft", { conta_pai_id: "dem", dre_secao: 8, nome: "Sistemas e softwares" }),
+  ];
+  const mapa = new Map(P.map((c) => [c.id, c]));
+  const por = (id: string) => categoriaDaConta(mapa.get(id)!, mapa);
+
+  it("classifica pelo nome da conta e, se não achar, pelos grupos acima", () => {
+    expect(por("sal")).toBe("equipe");
+    expect(por("prof")).toBe("equipe");
+    expect(por("alu")).toBe("ocupacao");
+    expect(por("mkt")).toBe("marketing");
+    expect(por("mat")).toBe("materiais");
+    expect(por("lab")).toBe("laboratorio");
+    expect(por("soft")).toBeNull();
+    expect(por("pro")).toBeNull();
+  });
+
+  it("calcula % da receita bruta e marca acima do teto; pró-labore e tributos ficam fora do total", () => {
+    const fat = 100000;
+    const lista = parcelas(
+      [
+        lanc("2026-10-05", "vendas", fat),
+        lanc("2026-10-05", "das", 6000),
+        lanc("2026-10-05", "sal", 28000), // 28,0%: no teto, dentro
+        lanc("2026-10-05", "alu", 9000), // 9%: acima de 7%
+        lanc("2026-10-05", "mat", 4000), // 4%: abaixo
+        lanc("2026-10-05", "lab", 8000),
+        lanc("2026-10-05", "soft", 1000),
+        lanc("2026-10-05", "pro", 15000),
+      ].map((l) => ({ ...l, direcao: l.rateios[0].conta_id === "vendas" ? ("entrada" as const) : ("saida" as const) })),
+      P,
+      "competencia",
+      {},
+      "2026-10-01",
+      "2026-10-31",
+    );
+    const { linhas, total } = custosReferencia(lista, P, fat);
+    const s = Object.fromEntries(linhas.map((l) => [l.id, [l.percentual, l.situacao]]));
+    expect(s.equipe).toEqual([0.28, "dentro"]);
+    expect(s.ocupacao).toEqual([0.09, "acima"]);
+    expect(s.materiais).toEqual([0.04, "abaixo"]);
+    expect(s.laboratorio).toEqual([0.08, "dentro"]);
+    expect(s.marketing).toEqual([0, "abaixo"]);
+    // 28 + 9 + 4 + 8 + 1 = 50%: sem DAS e sem pró-labore.
+    expect(total.valor).toBe(50000);
+    expect(total.situacao).toBe("abaixo");
+  });
+
+  it("sem faturamento não há percentual", () => {
+    const { total } = custosReferencia([], P, 0);
+    expect(total.situacao).toBe("sem_faturamento");
   });
 });
