@@ -1,6 +1,6 @@
 import { ArrowLeftRight, CalendarClock, ChevronRight, CreditCard, FileText, Landmark, LayoutDashboard, ListTree, ReceiptText, Scale, Store, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { cx } from "@/components/ui";
+import { classeBotao, cx } from "@/components/ui";
 import { hoje } from "@/lib/datas";
 import { carregarBaseFinanceira } from "@/lib/financeiro/consultas";
 import { AbaAPagar } from "./apagar";
@@ -81,7 +81,13 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
           {empresa.nome}
           <ChevronRight className="size-3.5" />
         </Link>
-        <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-slate-900">Financeiro</h1>
+        <div className="mt-0.5 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Financeiro</h1>
+          <Link href={`/empresas/${empresa.id}/relatorio-mensal`} className={classeBotao("secundario")}>
+            <FileText />
+            Relatório do mês
+          </Link>
+        </div>
         <p className="mt-1 text-sm text-slate-500">
           {dados.naCentral
             ? "Só a equipe lança. Quem tem acesso à central da clínica vê o painel, o resultado, o fluxo, as contas e os lançamentos, sem editar."
