@@ -31,6 +31,7 @@ import {
   altasDeDespesa,
   blocosDaEmpresa,
   caixaDoMes,
+  custosReferencia,
   despesasPorGrupo,
   dozeMeses,
   mesDoRelatorio,
@@ -39,6 +40,7 @@ import {
   principaisGrupos,
   proximos,
   type IdBloco,
+  type LinhaReferencia,
   type SaldoAcumulado,
 } from "@/lib/financeiro/relatorio-mensal";
 import { BlocoRelatorio, Folha, Montagem, NotaExtra, Recado, VersaoDre, type OpcaoBloco } from "./montagem";
@@ -107,6 +109,9 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
     : [];
   const altas = altasDeDespesa(todas, contas, mes);
   const previstosMes = previstosNoMes(todas, mes);
+  const referencia = custosReferencia(doMes, contas, r.faturamento);
+  const clinica = (empresa.segmento ?? "").trim().toLowerCase() === "odontologia";
+  const acimaDaReferencia = clinica && r.faturamento > 0 ? [...referencia.linhas, referencia.total].filter((l) => l.situacao === "acima") : [];
 
   const itens = itensContas(previstos, faturasAbertas);
   const prox = proximos(itens, dia);
@@ -126,12 +131,13 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
 
   // --- O que cada bloco tem para mostrar ------------------------------------------------------------------------
   const prejuizo = r.resultadoOperacional < 0;
-  const temAtencao = prejuizo || prox.quantasVencidas > 0 || menor30 < 0 || altas.length > 0;
+  const temAtencao = prejuizo || acimaDaReferencia.length > 0 || prox.quantasVencidas > 0 || menor30 < 0 || altas.length > 0;
   const disponivel: Partial<Record<IdBloco, { ok: boolean; motivo?: string }>> = {
     recado: { ok: true },
     atencao: { ok: temAtencao, motivo: "nada a apontar neste mês." },
     meses: { ok: meses12.filter((m) => comDados.has(m)).length >= 3, motivo: "menos de 3 meses com lançamentos." },
     grupos: { ok: grupos.length > 0, motivo: "nenhuma despesa no mês." },
+    referencias: { ok: r.faturamento > 0, motivo: "sem faturamento no mês." },
     fornecedores: {
       ok: fornecedores.length > 0,
       motivo: recursos.fornecedores ? "nenhuma despesa do mês tem fornecedor." : "cadastro de fornecedores ainda não instalado.",
@@ -149,6 +155,7 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
     motivo: disponivel[b.id]?.motivo,
   }));
   const mostraProjecao = disponivel.projecao!.ok;
+  const ligadoReferencia = disponivel.referencias!.ok;
 
   const opcoesMes = Array.from({ length: 24 }, (_, i) => somarMeses(dia.slice(0, 7), -i)).map((m) => ({ valor: m, rotulo: nomeMes(m) }));
   const nomeAssessoria = assessoria?.nome_fantasia || assessoria?.razao_social || "Assessoria";
@@ -228,6 +235,12 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
                     <strong className="tabular-nums">{moeda(-r.resultadoOperacional)}</strong>.
                   </Ponto>
                 )}
+                {acimaDaReferencia.map((l) => (
+                  <Ponto grave key={l.id}>
+                    {l.nome}: <strong className="tabular-nums">{pct.format(l.percentual!)}</strong> do faturamento, acima da referência da
+                    assessoria ({faixa(l)}).
+                  </Ponto>
+                ))}
                 {prox.quantasVencidas > 0 && (
                   <Ponto grave>
                     {prox.quantasVencidas === 1 ? "1 conta vencida e não paga" : `${prox.quantasVencidas} contas vencidas e não pagas`}:{" "}
@@ -312,6 +325,19 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
                   </tbody>
                 </table>
               </div>
+            </BlocoRelatorio>
+
+            <BlocoRelatorio id="referencias">
+              <Titulo>Custos x referência da assessoria</Titulo>
+              <ul className="space-y-2.5">
+                {[...referencia.linhas, referencia.total].map((l) => (
+                  <BarraReferencia key={l.id} linha={l} destaque={l.id === "total"} />
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-slate-500">
+                Em % do faturamento do mês. A faixa sombreada é a referência da assessoria para clínicas odontológicas. Pró-labore dos sócios
+                não entra; o custo total não inclui deduções nem tributos sobre o faturamento.
+              </p>
             </BlocoRelatorio>
 
             <BlocoRelatorio id="fornecedores">
@@ -410,6 +436,12 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
                   Vendas no cartão: pelo valor bruto, com a taxa da maquininha separada, quando há o relatório da operadora; sem ele, pelo valor
                   líquido que caiu no banco. A taxa nunca é estimada.
                 </li>
+                {clinica && ligadoReferencia && (
+                  <li>
+                    A referência de custos é da assessoria, a partir de faixas usadas por consultorias odontológicas. Não é uma média oficial do
+                    setor no Brasil.
+                  </li>
+                )}
                 {mostraProjecao && <li>O saldo projetado é uma estimativa, não uma garantia.</li>}
                 <li>Contas a pagar, vencidas e projeção mostram a situação em {formatarData(dia)}, quando este relatório foi gerado.</li>
                 <NotaExtra />
@@ -459,13 +491,51 @@ function Rosca({ fatias, centro, legenda }: { fatias: number[]; centro: string; 
           acumulado += tamanho;
           return el;
         })}
-      <text x="60" y="58" textAnchor="middle" className="fill-slate-900 text-[11px] font-semibold tabular-nums">
+      <text x="60" y="58" textAnchor="middle" className="fill-slate-900 text-[10px] font-semibold tabular-nums">
         {centro}
       </text>
       <text x="60" y="71" textAnchor="middle" className="fill-slate-500 text-[7.5px]">
         {legenda}
       </text>
     </svg>
+  );
+}
+
+const pct0 = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 0 });
+const faixa = (l: { min: number; max: number }) => `${pct0.format(l.min).replace("%", "")} a ${pct0.format(l.max)}`;
+
+const SITUACAO: Record<LinhaReferencia["situacao"], { texto: string; classe: string; cor: string }> = {
+  acima: { texto: "Acima", classe: "bg-red-50 text-red-700 ring-red-200", cor: "var(--grafico-negativo)" },
+  dentro: { texto: "Na faixa", classe: "bg-emerald-50 text-emerald-700 ring-emerald-200", cor: "var(--grafico-3)" },
+  abaixo: { texto: "Abaixo", classe: "bg-slate-100 text-slate-700 ring-slate-200", cor: "var(--grafico-1)" },
+  sem_faturamento: { texto: "—", classe: "bg-slate-100 text-slate-500 ring-slate-200", cor: "var(--grafico-outras)" },
+};
+
+// Barra com a faixa de referência sombreada e um ponto no valor do mês.
+function BarraReferencia({ linha: l, destaque }: { linha: LinhaReferencia; destaque?: boolean }) {
+  const p = l.percentual ?? 0;
+  const escala = Math.max(l.max * 1.6, p * 1.1, 0.01);
+  const x = (v: number) => `${Math.min(100, (v / escala) * 100)}%`;
+  const s = SITUACAO[l.situacao];
+  return (
+    <li className={cx("grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-3 text-sm", destaque && "border-t border-slate-200 pt-2.5 font-medium")}>
+      <span className="truncate text-slate-800">{l.nome}</span>
+      <span className="relative h-3 rounded-full bg-slate-100" style={{ printColorAdjust: "exact" }}>
+        <span
+          className="absolute inset-y-0 rounded-full"
+          style={{ left: x(l.min), width: `calc(${x(l.max)} - ${x(l.min)})`, background: "color-mix(in srgb, var(--grafico-3) 28%, transparent)", printColorAdjust: "exact" }}
+        />
+        <span
+          className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-[var(--color-superficie)]"
+          style={{ left: x(p), background: s.cor, printColorAdjust: "exact" }}
+        />
+      </span>
+      <span className="flex items-center justify-end gap-2 tabular-nums">
+        <span className="w-12 text-right text-slate-900">{l.percentual === null ? "—" : pct.format(p)}</span>
+        <span className="w-20 text-right text-xs text-slate-500">ref. {faixa(l)}</span>
+        <span className={cx("w-16 rounded-full px-2 py-0.5 text-center text-xs font-medium ring-1 ring-inset", s.classe)}>{s.texto}</span>
+      </span>
+    </li>
   );
 }
 

@@ -17,6 +17,7 @@ export type IdBloco =
   | "meses"
   | "dre"
   | "grupos"
+  | "referencias"
   | "fornecedores"
   | "caixa"
   | "proximos"
@@ -44,6 +45,7 @@ export const BLOCOS: Bloco[] = [
   { id: "meses", codigo: "B6", nome: "Últimos 12 meses", folha: "Resumo", regra: "dado", padrao: true, explicacao: "Só com 3 meses ou mais de dados." },
   { id: "dre", codigo: "B5", nome: "Resultado do mês (DRE)", folha: "Resultado", regra: "fixo", padrao: true, explicacao: "Sempre aparece." },
   { id: "grupos", codigo: "B7", nome: "Para onde foi o dinheiro", folha: "Resultado", regra: "dado", padrao: true, explicacao: "Some se não houver despesa no mês." },
+  { id: "referencias", codigo: "B17", nome: "Custos x referência da assessoria", folha: "Resultado", regra: "perfil", padrao: true, explicacao: "Só para Odontologia, com faturamento no mês." },
   { id: "fornecedores", codigo: "B8", nome: "Maiores fornecedores", folha: "Resultado", regra: "dado", padrao: false, explicacao: "Só com despesas ligadas a fornecedor." },
   { id: "caixa", codigo: "B9", nome: "Dinheiro em caixa no mês", folha: "Caixa", regra: "fixo", padrao: true, explicacao: "Sempre aparece." },
   { id: "proximos", codigo: "B10", nome: "Próximos 30 dias", folha: "Caixa", regra: "dado", padrao: true, explicacao: "Some se não houver contas previstas." },
@@ -56,7 +58,7 @@ export const BLOCOS: Bloco[] = [
 ];
 
 // Blocos de clínica só existem para o segmento Odontologia.
-export const BLOCOS_CLINICA: IdBloco[] = ["clinica", "dentistas", "cadeiras"];
+export const BLOCOS_CLINICA: IdBloco[] = ["referencias", "clinica", "dentistas", "cadeiras"];
 
 export function blocosDaEmpresa(segmento: string | null) {
   const clinica = (segmento ?? "").trim().toLowerCase() === "odontologia";
@@ -236,4 +238,89 @@ export function previstosNoMes(lista: Parcela[], mes: string) {
     else despesas -= p.centavos;
   }
   return { receitas: receitas / 100, despesas: despesas / 100 };
+}
+
+// ---------------------------------------------------------------------------
+// Custos x referência da assessoria (decisão do Daniel em 12/11/2026: limites iguais para todas as empresas de
+// Odontologia, em % da receita bruta). As faixas vêm de consultorias odontológicas dos EUA, sem estudo publicado;
+// o Daniel as adotou como referência da assessoria. Acima do teto vira alerta.
+// Cada conta de despesa entra numa categoria pelo nome dela ou de um grupo acima dela no plano. Pró-labore dos
+// sócios fica fora de tudo (a referência é "sem a remuneração do dentista dono").
+// ---------------------------------------------------------------------------
+
+export type Referencia = { id: string; nome: string; min: number; max: number; chaves: string[] };
+
+export const REFERENCIAS: Referencia[] = [
+  { id: "equipe", nome: "Equipe", min: 0.25, max: 0.28, chaves: ["pessoal", "salari", "encargo", "folha de pagamento", "beneficio"] },
+  { id: "ocupacao", nome: "Aluguel e ocupação", min: 0.05, max: 0.07, chaves: ["ocupacao", "aluguel", "condominio", "iptu"] },
+  { id: "materiais", nome: "Materiais", min: 0.05, max: 0.06, chaves: ["materia"] },
+  { id: "laboratorio", nome: "Laboratório", min: 0.06, max: 0.1, chaves: ["laborat"] },
+  { id: "marketing", nome: "Marketing", min: 0.03, max: 0.05, chaves: ["marketing", "publicidade", "propaganda"] },
+];
+// Custo total: custos e despesas variáveis e despesas operacionais (linhas 5, 6 e 8), sem pró-labore. Deduções e
+// tributos sobre o faturamento ficam fora, porque a referência de origem não tem imposto sobre a venda.
+export const REFERENCIA_TOTAL = { id: "total", nome: "Custo total", min: 0.6, max: 0.65 };
+const SECOES_CUSTO_TOTAL = [5, 6, 8];
+const SECOES_CATEGORIA = [5, 6, 8];
+
+export const normalizar = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+
+export const ehProLabore = (nome: string) => /pro[\s-]?labore/.test(normalizar(nome));
+
+// Nomes da conta e dos grupos acima dela, da própria conta para cima.
+function cadeia(conta: ContaPlano, plano: Map<string, ContaPlano>) {
+  const nomes: string[] = [];
+  let c: ContaPlano | undefined = conta;
+  for (let i = 0; c && i < 20; i++) {
+    nomes.push(normalizar(c.nome));
+    c = c.conta_pai_id ? plano.get(c.conta_pai_id) : undefined;
+  }
+  return nomes;
+}
+
+export function categoriaDaConta(conta: ContaPlano, plano: Map<string, ContaPlano>): string | null {
+  const nomes = cadeia(conta, plano);
+  if (nomes.some((n) => ehProLabore(n))) return null;
+  // A conta decide antes dos grupos: "Aluguel" dentro de "Demais despesas" é ocupação.
+  for (const nome of nomes) {
+    const ref = REFERENCIAS.find((r) => r.chaves.some((k) => nome.includes(k)));
+    if (ref) return ref.id;
+  }
+  return null;
+}
+
+export type SituacaoReferencia = "abaixo" | "dentro" | "acima" | "sem_faturamento";
+export type LinhaReferencia = { id: string; nome: string; min: number; max: number; valor: number; percentual: number | null; situacao: SituacaoReferencia };
+
+function situacao(p: number | null, min: number, max: number): SituacaoReferencia {
+  if (p === null) return "sem_faturamento";
+  // Comparação em décimos de ponto percentual, para 28,0% contar como dentro de "até 28%".
+  const x = Math.round(p * 1000);
+  if (x > Math.round(max * 1000)) return "acima";
+  if (x < Math.round(min * 1000)) return "abaixo";
+  return "dentro";
+}
+
+export function custosReferencia(lista: Parcela[], plano: ContaPlano[], faturamento: number): { linhas: LinhaReferencia[]; total: LinhaReferencia } {
+  const mapa = new Map(plano.map((c) => [c.id, c]));
+  const por = new Map<string, number>();
+  let total = 0;
+  for (const p of lista) {
+    const secao = p.conta.dre_secao ?? 0;
+    if (ehProLabore(p.conta.nome) || cadeia(p.conta, mapa).some(ehProLabore)) continue;
+    if (SECOES_CUSTO_TOTAL.includes(secao)) total -= p.centavos;
+    if (!SECOES_CATEGORIA.includes(secao)) continue;
+    const cat = categoriaDaConta(p.conta, mapa);
+    if (cat) por.set(cat, (por.get(cat) ?? 0) - p.centavos);
+  }
+  const fat = Math.round(faturamento * 100);
+  const linha = (r: { id: string; nome: string; min: number; max: number }, c: number): LinhaReferencia => {
+    const percentual = fat > 0 ? c / fat : null;
+    return { id: r.id, nome: r.nome, min: r.min, max: r.max, valor: c / 100, percentual, situacao: situacao(percentual, r.min, r.max) };
+  };
+  return { linhas: REFERENCIAS.map((r) => linha(r, por.get(r.id) ?? 0)), total: linha(REFERENCIA_TOTAL, total) };
 }
