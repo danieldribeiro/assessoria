@@ -1,14 +1,23 @@
 import { CabecalhoPagina } from "@/components/ui";
 import { FormularioSenha } from "./formulario";
 
-export const metadata = { title: "Trocar senha" };
+export const metadata = { title: "Senha" };
 
-// Trocar a senha de quem está logado. Quem entrou pelo link de "Esqueci minha senha" cria a senha nova aqui.
-export default function PaginaSenha() {
+// Trocar a senha de quem está logado. Quem chega pelo convite cria aqui a primeira senha;
+// quem entrou pelo link de "Esqueci minha senha" cria a senha nova.
+export default async function PaginaSenha({ searchParams }: PageProps<"/central/senha">) {
+  const convite = (await searchParams).convite === "1";
   return (
     <>
-      <CabecalhoPagina titulo="Trocar senha" subtitulo="Crie uma senha nova para entrar com e-mail e senha." />
-      <FormularioSenha />
+      <CabecalhoPagina
+        titulo={convite ? "Crie sua senha" : "Trocar senha"}
+        subtitulo={
+          convite
+            ? "Boas-vindas ao AXIS! Crie a senha que você vai usar para entrar com o seu e-mail."
+            : "Crie uma senha nova para entrar com e-mail e senha."
+        }
+      />
+      <FormularioSenha convite={convite} />
     </>
   );
 }

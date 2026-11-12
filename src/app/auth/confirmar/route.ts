@@ -2,7 +2,8 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { criarCliente } from "@/lib/supabase/server";
 
-// Destino do link de acesso enviado por e-mail: troca o código pela sessão e abre a central.
+// Destino dos links enviados por e-mail: troca o código pela sessão e abre a central.
+// Quem chega pelo convite vai direto criar a senha.
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const code = url.searchParams.get("code");
@@ -17,5 +18,6 @@ export async function GET(request: NextRequest) {
       : { error: new Error("Link sem código") };
 
   if (error) return NextResponse.redirect(new URL("/login?modo=link&erro=link", request.url));
-  return NextResponse.redirect(new URL("/central", request.url));
+  const destino = tipo === "invite" ? "/central/senha?convite=1" : "/central";
+  return NextResponse.redirect(new URL(destino, request.url));
 }

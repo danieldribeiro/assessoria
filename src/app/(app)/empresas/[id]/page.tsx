@@ -22,7 +22,7 @@ import { enderecoEmLinhas, type Contato, type Diagnostico, type Empresa } from "
 import { formatarData, formatarPeriodo } from "@/lib/datas";
 import { listarEquipe, ultimasAreas, usuarioAtual } from "@/lib/consultas";
 import { criarCliente } from "@/lib/supabase/server";
-import { definirFinanceiroNaCentral, liberarAcesso, removerAcesso } from "@/server/central";
+import { definirFinanceiroNaCentral, liberarAcesso, reenviarConvite, removerAcesso } from "@/server/central";
 import { criarDiagnostico } from "@/server/diagnosticos";
 import { excluirContato, excluirEmpresa, salvarContato, salvarEmpresa } from "@/server/empresas";
 
@@ -282,7 +282,7 @@ function DadosCadastrais({ empresa }: { empresa: Empresa }) {
   );
 }
 
-// Quem entra na central desta clínica. O e-mail liberado recebe um link de acesso no login.
+// Quem entra na central desta clínica. O e-mail liberado recebe um convite para criar a senha.
 function CentralDaClinica({ empresa }: { empresa: EmpresaDetalhe }) {
   const publicados = empresa.diagnosticos.filter((d) => d.publicado_em).length;
   const sugestoes = empresa.contatos.filter(
@@ -305,10 +305,9 @@ function CentralDaClinica({ empresa }: { empresa: EmpresaDetalhe }) {
           aviso="Acesso liberado"
         >
           <p className="rounded-md bg-marca-50 px-3 py-2 text-sm text-marca-800">
-            Depois de liberar, crie a conta da pessoa no Supabase com uma senha provisória (Authentication → Users →
-            Add user, com “Auto Confirm User”). Ela entra no sistema com e-mail e senha e troca a senha em “Trocar
-            senha”. Se esquecer, usa “Esqueci minha senha” e recebe um link neste e-mail. Ela vê só esta clínica, só os diagnósticos publicados e, se você ligar, o financeiro (só
-            para ver, sem editar nada).
+            Ao liberar, o AXIS manda um convite para este e-mail. A pessoa toca em “Aceitar convite”, cria a própria
+            senha e já entra. Depois, entra sempre com e-mail e senha; se esquecer, usa “Esqueci minha senha”. Ela vê só
+            esta clínica, só os diagnósticos publicados e, se você ligar, o financeiro (só para ver, sem editar nada).
           </p>
           <Campo rotulo="Nome">
             <Entrada name="nome" defaultValue={sugestoes[0]?.nome ?? ""} />
@@ -331,14 +330,28 @@ function CentralDaClinica({ empresa }: { empresa: EmpresaDetalhe }) {
                 <div className="truncate text-sm font-medium text-slate-900">{a.nome ?? a.email}</div>
                 <div className="truncate text-xs text-slate-500">
                   {a.nome && `${a.email} · `}
-                  {a.ultimo_acesso ? `entrou em ${formatarData(a.ultimo_acesso.slice(0, 10))}` : "ainda não entrou"}
+                  {a.ultimo_acesso
+                    ? `entrou em ${formatarData(a.ultimo_acesso.slice(0, 10))}`
+                    : "convite enviado, ainda não entrou"}
                 </div>
               </div>
-              <BotaoExcluir
-                acao={removerAcesso.bind(null, a.id)}
-                pergunta={`Tirar o acesso de ${a.email} à central?`}
-                rotulo="Tirar"
-              />
+              <div className="flex shrink-0 items-center gap-1">
+                {!a.ultimo_acesso && (
+                  <BotaoAcao
+                    acao={reenviarConvite.bind(null, a.id)}
+                    pergunta={`Mandar o convite de novo para ${a.email}? O link anterior deixa de valer.`}
+                    aviso="Convite reenviado"
+                    className={classeBotao("fantasma", true)}
+                  >
+                    Reenviar convite
+                  </BotaoAcao>
+                )}
+                <BotaoExcluir
+                  acao={removerAcesso.bind(null, a.id)}
+                  pergunta={`Tirar o acesso de ${a.email} à central?`}
+                  rotulo="Tirar"
+                />
+              </div>
             </li>
           ))}
         </ul>
