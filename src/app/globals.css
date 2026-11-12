@@ -79,6 +79,8 @@ dialog[open] {
   --grafico-2: #eb6834;
   --grafico-3: #1baf7a;
   --grafico-4: #eda100;
+  --grafico-5: #8b5cf6;
+  --grafico-outras: #94a3b8;
   --grafico-negativo: #e34948;
   --grafico-grade: #e8eaee;
 }
@@ -87,6 +89,8 @@ html.dark {
   --grafico-2: #d95926;
   --grafico-3: #199e70;
   --grafico-4: #c98500;
+  --grafico-5: #9a78f0;
+  --grafico-outras: #64748b;
   --grafico-negativo: #e66767;
   --grafico-grade: oklch(31% 0.006 286);
 }

@@ -97,6 +97,25 @@ export function Montagem({
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [chaveEscolhas, chaveTextos]);
 
+  // Na tela o relatório segue o tema escolhido; o PDF sai sempre claro, como papel.
+  useEffect(() => {
+    const html = document.documentElement;
+    let estavaEscuro = false;
+    const antes = () => {
+      estavaEscuro = html.classList.contains("dark");
+      html.classList.remove("dark");
+    };
+    const depois = () => {
+      if (estavaEscuro) html.classList.add("dark");
+    };
+    window.addEventListener("beforeprint", antes);
+    window.addEventListener("afterprint", depois);
+    return () => {
+      window.removeEventListener("beforeprint", antes);
+      window.removeEventListener("afterprint", depois);
+    };
+  }, []);
+
   useEffect(() => {
     if (carregado) gravar(chaveEscolhas, JSON.stringify({ ligados: [...escolhidos], dreAberta }));
   }, [carregado, chaveEscolhas, escolhidos, dreAberta]);
@@ -123,7 +142,7 @@ export function Montagem({
 
   return (
     <Contexto.Provider value={{ ligados, dreAberta, recado, nota }}>
-      <div className="sempre-claro min-h-dvh bg-slate-100 text-slate-900 print:bg-white">
+      <div className="min-h-dvh bg-fundo text-slate-900 print:bg-white">
         <div className="nao-imprimir sticky top-0 z-10 border-b border-slate-200 bg-superficie">
           <div className="mx-auto flex min-h-14 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-2">
             <Link href={voltar} className="text-sm text-slate-500 hover:text-slate-900">
@@ -327,7 +346,7 @@ export function Folha({ primeira, children }: { primeira?: boolean; children: Re
   return (
     <article
       className={cx(
-        "mx-auto max-w-[52rem] space-y-7 bg-white px-6 py-8 shadow-sm sm:px-12 sm:py-10 print:max-w-none print:px-0 print:py-0 print:shadow-none",
+        "mx-auto max-w-[52rem] space-y-7 bg-superficie px-6 py-8 shadow-sm sm:px-12 sm:py-10 print:max-w-none print:px-0 print:py-0 print:shadow-none",
         !primeira && "quebra-antes",
       )}
     >

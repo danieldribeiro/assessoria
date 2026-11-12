@@ -49,6 +49,7 @@ const curtoMes = (iso: string) => `${NOMES_MES[Number(iso.slice(5, 7)) - 1].slic
 const moeda = (v: number) => formatarValor(v, "R$")!;
 const numero = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const valor = (v: number) => (Math.round(v * 100) === 0 ? "0,00" : numero.format(v).replace("-", "−"));
+const compacto = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
 const pct = new Intl.NumberFormat("pt-BR", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export async function generateMetadata({ params }: PageProps<"/empresas/[id]/relatorio-mensal">) {
@@ -124,7 +125,8 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
   });
 
   // --- O que cada bloco tem para mostrar ------------------------------------------------------------------------
-  const temAtencao = prox.quantasVencidas > 0 || menor30 < 0 || altas.length > 0;
+  const prejuizo = r.resultadoOperacional < 0;
+  const temAtencao = prejuizo || prox.quantasVencidas > 0 || menor30 < 0 || altas.length > 0;
   const disponivel: Partial<Record<IdBloco, { ok: boolean; motivo?: string }>> = {
     recado: { ok: true },
     atencao: { ok: temAtencao, motivo: "nada a apontar neste mês." },
@@ -220,6 +222,12 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
             <BlocoRelatorio id="atencao">
               <Titulo>Pontos de atenção</Titulo>
               <ul className="space-y-1.5 text-sm text-slate-800">
+                {prejuizo && (
+                  <Ponto grave>
+                    Resultado operacional negativo: as despesas passaram o faturamento em{" "}
+                    <strong className="tabular-nums">{moeda(-r.resultadoOperacional)}</strong>.
+                  </Ponto>
+                )}
                 {prox.quantasVencidas > 0 && (
                   <Ponto grave>
                     {prox.quantasVencidas === 1 ? "1 conta vencida e não paga" : `${prox.quantasVencidas} contas vencidas e não pagas`}:{" "}
@@ -268,41 +276,58 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
               </VersaoDre>
             </BlocoRelatorio>
 
-            <div className="grid gap-7 md:grid-cols-2 print:grid-cols-2">
-              <BlocoRelatorio id="grupos">
-                <Titulo>Para onde foi o dinheiro</Titulo>
-                <ul className="space-y-2 text-sm">
-                  {grupos.map((g) => (
-                    <li key={g.id} className="grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto] items-center gap-2">
-                      <span className="truncate text-slate-700" title={g.nome}>
-                        {g.nome}
-                      </span>
-                      <span className="h-2.5 overflow-hidden rounded bg-slate-100">
-                        <span className="block h-full rounded" style={{ width: `${(g.centavos / grupos[0].centavos) * 100}%`, background: "var(--grafico-1)", printColorAdjust: "exact" }} />
-                      </span>
-                      <span className="text-right tabular-nums text-slate-900">
-                        {valor(g.centavos / 100)}
-                        <span className="ml-1.5 text-xs text-slate-500">{pct.format(totalGrupos ? g.centavos / totalGrupos : 0)}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </BlocoRelatorio>
-
-              <BlocoRelatorio id="fornecedores">
-                <Titulo>Maiores fornecedores</Titulo>
+            <BlocoRelatorio id="grupos">
+              <Titulo>Para onde foi o dinheiro</Titulo>
+              <div className="grid items-center gap-6 sm:grid-cols-[11rem_minmax(0,1fr)] print:grid-cols-[11rem_minmax(0,1fr)]">
+                <Rosca
+                  fatias={grupos.map((g) => g.centavos)}
+                  centro={`R$ ${compacto.format(totalGrupos / 100)}`}
+                  legenda="em despesas"
+                />
                 <table className="w-full text-sm tabular-nums">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                      <th className="py-1.5 pr-3 font-medium">Grupo</th>
+                      <th className="py-1.5 pr-3 text-right font-medium">Valor</th>
+                      <th className="py-1.5 pr-3 text-right font-medium">% das despesas</th>
+                      <th className="py-1.5 text-right font-medium">% do fat.</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {fornecedores.map((f) => (
-                      <tr key={f.id ?? f.nome} className="border-b border-slate-100">
-                        <td className="py-1.5 pr-3 text-slate-700">{f.nome}</td>
-                        <td className="py-1.5 text-right text-slate-900">{valor(f.valor)}</td>
+                    {grupos.map((g, i) => (
+                      <tr key={g.id} className="border-b border-slate-100">
+                        <td className="py-1.5 pr-3 text-slate-800">
+                          <span className="flex items-center gap-2">
+                            <span className="size-2.5 shrink-0 rounded-sm" style={{ background: corFatia(i, grupos.length), printColorAdjust: "exact" }} />
+                            <span className="min-w-0 truncate" title={g.nome}>
+                              {g.nome}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-3 text-right text-slate-900">{valor(g.centavos / 100)}</td>
+                        <td className="py-1.5 pr-3 text-right text-slate-600">{pct.format(totalGrupos ? g.centavos / totalGrupos : 0)}</td>
+                        <td className="py-1.5 text-right text-slate-600">{r.faturamento > 0 ? pct.format(g.centavos / 100 / r.faturamento) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </BlocoRelatorio>
-            </div>
+              </div>
+            </BlocoRelatorio>
+
+            <BlocoRelatorio id="fornecedores">
+              <Titulo>Maiores fornecedores</Titulo>
+              <table className="w-full text-sm tabular-nums">
+                <tbody>
+                  {fornecedores.map((f) => (
+                    <tr key={f.id ?? f.nome} className="border-b border-slate-100">
+                      <td className="py-1.5 pr-3 text-slate-700">{f.nome}</td>
+                      <td className="py-1.5 pr-3 text-right text-slate-900">{valor(f.valor)}</td>
+                      <td className="py-1.5 text-right text-xs text-slate-500">{r.faturamento > 0 ? `${pct.format(f.valor / r.faturamento)} do fat.` : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </BlocoRelatorio>
             {rodape("Valores em reais. Despesas = deduções, tributos sobre o faturamento, custos e despesas variáveis e despesas operacionais.")}
           </Folha>
 
@@ -395,6 +420,52 @@ export default async function RelatorioMensal({ params, searchParams }: PageProp
         </>
       )}
     </Montagem>
+  );
+}
+
+// Cores das fatias: as quatro do sistema de gráficos, mais duas; "Outras" (a última, quando existe) sempre em cinza.
+const CORES_FATIA = ["var(--grafico-1)", "var(--grafico-2)", "var(--grafico-3)", "var(--grafico-4)", "var(--grafico-5)"];
+function corFatia(i: number, total: number) {
+  return i === total - 1 && total > CORES_FATIA.length ? "var(--grafico-outras)" : CORES_FATIA[i % CORES_FATIA.length];
+}
+
+// Gráfico de rosca em SVG, desenhado no servidor (sai igual na tela e no PDF).
+function Rosca({ fatias, centro, legenda }: { fatias: number[]; centro: string; legenda: string }) {
+  const total = fatias.reduce((a, b) => a + b, 0);
+  const raio = 42;
+  const volta = 2 * Math.PI * raio;
+  let acumulado = 0;
+  return (
+    <svg viewBox="0 0 120 120" role="img" aria-label="Distribuição das despesas por grupo" className="mx-auto w-full max-w-44">
+      <circle cx="60" cy="60" r={raio} fill="none" stroke="var(--grafico-grade)" strokeWidth="16" />
+      {total > 0 &&
+        fatias.map((v, i) => {
+          const tamanho = (v / total) * volta;
+          const el = (
+            <circle
+              key={i}
+              cx="60"
+              cy="60"
+              r={raio}
+              fill="none"
+              stroke={corFatia(i, fatias.length)}
+              strokeWidth="16"
+              strokeDasharray={`${Math.max(0, tamanho - 1)} ${volta}`}
+              strokeDashoffset={-acumulado}
+              transform="rotate(-90 60 60)"
+              style={{ printColorAdjust: "exact" }}
+            />
+          );
+          acumulado += tamanho;
+          return el;
+        })}
+      <text x="60" y="58" textAnchor="middle" className="fill-slate-900 text-[11px] font-semibold tabular-nums">
+        {centro}
+      </text>
+      <text x="60" y="71" textAnchor="middle" className="fill-slate-500 text-[7.5px]">
+        {legenda}
+      </text>
+    </svg>
   );
 }
 
