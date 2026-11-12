@@ -1,0 +1,38 @@
+#!/bin/bash
+# Valida a 0016 (dados da empresa pela central) num Postgres local descartável: esquema 0001–0006, dados fictícios,
+# migrations 0007 a 0016, os testes antigos (para garantir que nada mudou) e os testes da 0016.
+# Uso: PGHOST=/caminho/do/socket PGPORT=5432 PGUSER=postgres supabase/testes/0016/rodar.sh
+set -e
+S=$(cd "$(dirname "$0")" && pwd); R=$S/../../migrations; T6=$S/../0006; W=$(mktemp -d)
+P="psql -v ON_ERROR_STOP=1 -q -X"
+$P -c "drop database if exists teste_0016" -c "create database teste_0016"
+D="$P -d teste_0016"
+for f in $T6/00_stubs.sql $R/000{1,2,3,4,5,6}_*.sql $T6/seed.sql $S/../0007/seed-local.sql; do
+  $D -f $f >/dev/null 2>&1 || { echo "falhou: $f"; exit 1; }
+done
+$D -f $S/../0014/storage-stub.sql >/dev/null
+echo "1. Esquema 0001–0006, dados fictícios e o mínimo do storage carregados"
+$D -At -f $T6/conferencia.sql > $W/conf-antes.txt
+for m in 0007_financeiro_fluxo_caixa 0008_financeiro_editar_lancamento 0009_financeiro_fornecedores 0010_financeiro_extratos_ofx 0011_financeiro_cartoes 0012_financeiro_na_central 0013_historico_alteracoes 0014_envios_arquivos 0015_envios_semanal 0016_dados_pela_central; do
+  $D --single-transaction -f $R/$m.sql
+done
+$D -At -f $T6/conferencia.sql > $W/conf-depois.txt
+diff -q $W/conf-antes.txt $W/conf-depois.txt >/dev/null && echo "2. Aplicadas 0007 a 0016; núcleo do diagnóstico igual: $(tr '\n' ' ' < $W/conf-depois.txt)"
+$D -f $S/../0007/01_permissoes_supabase.sql
+# O histórico é só leitura para a API, também no Postgres local (a 0013 tira a gravação; a permissão local acima a devolve).
+$D -c "revoke insert, update, delete, truncate on public.historico from public, anon, authenticated"
+resumo() { python3 -c "import json,sys; d=json.load(open('$1')); print('$2', d['passaram'], 'de', d['total']); [print('   falhou:', f['caso'], '| esperado', f['esperado'], '| obtido', f['obtido']) for f in d['falhas']]"; }
+$D -At -f $S/../0008/testes.sql | tail -1 > $W/r0008.json; resumo $W/r0008.json "3. Testes da 0007 e da 0008, com a 0016 aplicada:"
+$D -At -f $S/../0010/testes.sql | tail -1 > $W/r0010.json; resumo $W/r0010.json "4. Testes da 0009 e da 0010, com a 0016 aplicada:"
+$D -At -f $S/../0011/testes.sql | tail -1 > $W/r0011.json; resumo $W/r0011.json "5. Testes da 0011, com a 0016 aplicada:"
+$D -At -f $S/../0012/testes.sql | tail -1 > $W/r0012.json; resumo $W/r0012.json "6. Testes da 0012, com a 0016 aplicada:"
+$D -At -f $S/../0013/testes.sql | tail -1 > $W/r0013.json; resumo $W/r0013.json "7. Testes da 0013, com a 0016 aplicada:"
+# Com a 0015, o gatilho recusa o dia errado antes da checagem da coluna: muda só o nome da regra que recusa.
+sed "s/'mês sempre no dia 1', 'recusado:envios_arquivos_competencia_check'/'mês sempre no dia 1', 'recusado:envios_competencia'/" $S/../0014/testes.sql > $W/t0014.sql
+$D -At -f $W/t0014.sql | tail -1 > $W/r0014.json; resumo $W/r0014.json "7b. Testes da 0014, com a 0016 aplicada:"
+$D -At -f $S/../0015/testes.sql | tail -1 > $W/r0015.json; resumo $W/r0015.json "7c. Testes da 0015, com a 0016 aplicada:"
+$D -At -f $S/testes.sql | tail -1 > $S/resultado-testes-local.json; resumo $S/resultado-testes-local.json "7d. Testes da 0016:"
+$D -At -c "select (select count(*) from public.historico) + (select count(*) from public.envios_itens) + (select count(*) from storage.objects) + (select count(*) from public.contatos)" | grep -q "^0$" && echo "8. Testes não deixaram resíduo"
+$D -At -f $T6/conferencia.sql > $W/conf-fim.txt
+diff -q $W/conf-antes.txt $W/conf-fim.txt >/dev/null && echo "9. Núcleo do diagnóstico igual ao de antes das migrations"
+rm -r $W

@@ -1,7 +1,7 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import { criarCliente } from "@/lib/supabase/server";
-import { CATEGORIAS, corDoIndicador, porPrioridade, type Assessoria, type Cor, type Indicador, type Papel } from "@/lib/dominio";
+import { CATEGORIAS, corDoIndicador, porPrioridade, type Assessoria, type Cadastro, type Cor, type Indicador, type Papel } from "@/lib/dominio";
 import type { DiagnosticoCompleto } from "@/lib/consultas";
 
 // Leituras da central da clínica. Tudo passa pelas funções central_* do banco, que conferem
@@ -106,4 +106,24 @@ export function comCores(atual: Indicador[], anterior: Indicador[] = []): Indica
     cor: corDoIndicador(i),
     anterior: anterior.find((a) => a.nome === i.nome)?.valor ?? null,
   }));
+}
+
+export type DadosEmpresaCentral = Cadastro & {
+  id: string;
+  nome: string;
+  responsavel: { nome: string; cargo: string | null; telefone: string | null; email: string | null } | null;
+};
+
+// Cadastro da empresa para a tela "Dados da empresa" da central. Vazio se a pessoa não tem acesso
+// ou se a migration 0016 ainda não foi aplicada (aí a tela avisa e o lembrete não aparece).
+export async function dadosDaEmpresa(empresaId: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase.rpc("central_dados_empresa", { p_empresa: empresaId });
+  if (error) return null;
+  return (data ?? null) as DadosEmpresaCentral | null;
+}
+
+// Faltam os dados básicos para a nota? (o lembrete na central some quando estão preenchidos)
+export function faltamDados(d: DadosEmpresaCentral | null) {
+  return !!d && (!d.cnpj || !d.razao_social || !d.cep || !d.responsavel);
 }
