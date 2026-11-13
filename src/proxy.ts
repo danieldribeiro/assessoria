@@ -67,6 +67,7 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// /_vercel/... é o Vercel Analytics: não precisa de login nem de sessão.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|_vercel|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };
