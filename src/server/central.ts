@@ -122,7 +122,12 @@ export async function pedirLink(_estado: { enviado?: boolean; erro?: string } | 
   if (!email) return { erro: "Informe seu e-mail." };
 
   const supabase = await criarCliente();
-  const { data: liberado } = await supabase.rpc("pode_receber_link", { p_email: email });
+  // A conferência do e-mail passa pela chave de serviço: desde a migration 0017 ninguém de fora chama
+  // pode_receber_link pela API. Sem a chave na Vercel, cai no cliente comum (funciona só antes da 0017).
+  const { data: liberado, error: erroConferencia } = await (criarClienteAdmin() ?? supabase).rpc("pode_receber_link", {
+    p_email: email,
+  });
+  if (erroConferencia) console.error("pode_receber_link", erroConferencia);
   if (liberado) {
     const { error } = await supabase.auth.signInWithOtp({
       email,

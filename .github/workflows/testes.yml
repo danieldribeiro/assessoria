@@ -1,0 +1,38 @@
+# Roda a conferência automática em todo pull request e em todo envio para a main.
+# Se algum passo falhar, o PR mostra um X vermelho e o motivo fica em "Details".
+name: Testes
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conferir:
+    name: Lint, testes e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Testes (Vitest)
+        run: npm test
+      - name: Build do Next
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: Pacotes com falha de segurança grave
+        run: npm audit --omit=dev --audit-level=high
