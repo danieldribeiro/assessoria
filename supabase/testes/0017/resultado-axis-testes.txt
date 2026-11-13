@@ -1,0 +1,3 @@
+0017 aplicada no axis-testes (todjkvlpgygmaknczevv) em 2026-11-13 ~01:41 UTC, depois de atualizar o
+axis-testes com 0012 a 0016 (estava na 0011). Resultado de testes.sql: 9/9 ok.
+Advisor de segurança do axis-testes depois: nenhuma função chamável sem login (anon).
