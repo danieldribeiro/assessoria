@@ -36,7 +36,7 @@ async function ferramenta(token: string, name: string, args: Record<string, unkn
   return { erro: r.isError, dados: r.isError ? r.content[0].text : JSON.parse(r.content[0].text) };
 }
 
-describe.skipIf(!ligado)("conector do Claude contra o banco de testes", () => {
+describe.skipIf(!ligado)("conector do Claude contra o banco de testes", { timeout: 30_000 }, () => {
   let equipe: string;
   let cliente: string;
 
