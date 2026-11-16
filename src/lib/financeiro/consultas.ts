@@ -1,7 +1,9 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import type { Cartao, ContaCaixa, ContaPlano, Contraparte, Extrato, Fatura, Lancamento, Movimento, Saldo, Transferencia } from "@/lib/financeiro/dominio";
-import { diaAnterior, resumoContagem, variacoesEstoque, type Contagem, type ItemEstoque, type LinhaContagem } from "@/lib/financeiro/estoque";
+import { diaAnterior, resumoContagem, variacoesEstoque, type Contagem, type ItemEstoque, type LinhaContagem, type LinhaFicha, type LinhaVenda, type Produto, type VendaMes } from "@/lib/financeiro/estoque";
+import { montarDre, parcelas } from "@/lib/financeiro/painel";
+import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
 import type { MovimentoConta } from "@/lib/financeiro/fluxo";
 import { criarCliente } from "@/lib/supabase/server";
 
@@ -35,6 +37,7 @@ export async function carregarBaseFinanceira(empresaId: string, origem: "equipe"
     { error: e4 },
     { data: cartoes, error: e5 },
     { error: e6 },
+    { error: e7 },
   ] = await Promise.all([
       carregarEmpresa(supabase, empresaId, origem),
       supabase.from("fin_contas").select("*").eq("empresa_id", empresaId),
@@ -43,6 +46,7 @@ export async function carregarBaseFinanceira(empresaId: string, origem: "equipe"
       supabase.from("fin_extratos").select("id").eq("empresa_id", empresaId).limit(1),
       supabase.from("fin_cartoes").select("id, empresa_id, nome, conta_caixa_id, dia_fechamento, dia_vencimento, ativo").eq("empresa_id", empresaId).order("nome"),
       supabase.from("fin_estoque_contagens").select("id").eq("empresa_id", empresaId).limit(1),
+      supabase.from("fin_estoque_produtos").select("id").eq("empresa_id", empresaId).limit(1),
     ]);
   if (!empresa) notFound();
   if (e1 || e2) throw new Error((e1 ?? e2)!.message);
@@ -50,6 +54,7 @@ export async function carregarBaseFinanceira(empresaId: string, origem: "equipe"
   if (e4 && !semTabela(e4)) throw new Error(e4.message);
   if (e5 && !semTabela(e5)) throw new Error(e5.message);
   if (e6 && !semTabela(e6)) throw new Error(e6.message);
+  if (e7 && !semTabela(e7)) throw new Error(e7.message);
   return {
     empresa: { id: empresa.id, nome: empresa.nome, segmento: empresa.segmento ?? null } as { id: string; nome: string; segmento: string | null },
     // A chave da 0012: o financeiro desta empresa aparece na central da clínica (só para ver).
@@ -62,7 +67,7 @@ export async function carregarBaseFinanceira(empresaId: string, origem: "equipe"
     contrapartes: (contrapartes ?? []) as Contraparte[],
     cartoes: (cartoes ?? []) as Cartao[],
     // Recursos das migrations 0009, 0010 e 0011: só aparecem depois de aplicadas.
-    recursos: { fornecedores: !e3, extratos: !e4, cartoes: !e5, estoque: !e6 },
+    recursos: { fornecedores: !e3, extratos: !e4, cartoes: !e5, estoque: !e6, fichas: !e7 },
   };
 }
 
@@ -341,4 +346,50 @@ export async function carregarVariacoes(empresaId: string, meses: string[], inic
   if (!meses.length) return [];
   const contagens = await carregarValoresContagens(empresaId, diaAnterior(meses[0]), fim);
   return variacoesEstoque(contagens, meses, inicio, fim);
+}
+
+// Produtos vendidos com a ficha técnica de cada um (0019).
+export async function carregarProdutos(empresaId: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("fin_estoque_produtos")
+    .select("*, ficha:fin_estoque_ficha_itens(*)")
+    .eq("empresa_id", empresaId)
+    .order("nome");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(({ ficha, ...p }) => ({
+    ...(p as Produto),
+    ficha: ((ficha ?? []) as LinhaFicha[]).map((l) => ({ ...l, quantidade: Number(l.quantidade) })).sort((a, b) => a.ordem - b.ordem),
+  }));
+}
+
+// Relatórios de vendas importados, do mês mais recente para o mais antigo, com as linhas.
+export async function carregarVendas(empresaId: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("fin_estoque_vendas")
+    .select("*, linhas:fin_estoque_vendas_itens(*)")
+    .eq("empresa_id", empresaId)
+    .order("mes", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(({ linhas, ...v }) => ({
+    ...(v as VendaMes),
+    linhas: ((linhas ?? []) as LinhaVenda[])
+      .map((l) => ({ ...l, quantidade: Number(l.quantidade), valor: l.valor === null ? null : Number(l.valor) }))
+      .sort((a, b) => a.ordem - b.ordem),
+  }));
+}
+
+// CMV real de um mês (AAAA-MM-01), em centavos: compras da linha 5 da DRE (competência) menos a variação de estoque.
+// Sem as duas contagens fechadas, a variação fica null e o CMV real são só as compras.
+export async function carregarCmvReal(empresaId: string, contas: ContaPlano[], mes: string) {
+  const fim = ultimoDiaDoMes(mes.slice(0, 7));
+  const [lancamentos, [variacao]] = await Promise.all([
+    carregarLancamentos(empresaId, mes, fim, "competencia"),
+    carregarVariacoes(empresaId, [mes], mes, fim),
+  ]);
+  const dre = montarDre(parcelas(lancamentos, contas, "competencia", {}, mes, fim), [mes], contas);
+  const compras = -Math.round(dre.linhas[4].total * 100);
+  const centavos = variacao?.centavos ?? null;
+  return { compras, variacao: centavos, cmv: centavos === null ? compras : compras - centavos, motivo: centavos === null ? variacao : null };
 }

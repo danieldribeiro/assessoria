@@ -17,7 +17,7 @@ export type Evento = {
 export const GRUPOS = {
   diagnosticos: ["diagnosticos", "solicitacoes", "indicadores", "achados", "oportunidades", "acoes"],
   cadastros: ["empresas", "contatos", "acessos_central", "perfis", "assessoria"],
-  financeiro: ["fin_lancamentos", "fin_contas", "fin_estoque_itens", "fin_estoque_contagens"],
+  financeiro: ["fin_lancamentos", "fin_contas", "fin_estoque_itens", "fin_estoque_contagens", "fin_estoque_produtos", "fin_estoque_vendas"],
   arquivos: ["envios_arquivos", "envios_itens", "envios_dispensas"],
 } as const;
 export type Grupo = keyof typeof GRUPOS;
@@ -38,6 +38,8 @@ export const ROTULO_TABELA: Record<string, string> = {
   fin_contas: "Conta do plano",
   fin_estoque_itens: "Insumo do estoque",
   fin_estoque_contagens: "Contagem de estoque",
+  fin_estoque_produtos: "Produto vendido",
+  fin_estoque_vendas: "Vendas do PDV",
   envios_arquivos: "Arquivo enviado",
   envios_itens: "Item da lista de arquivos",
   envios_dispensas: "Arquivo dispensado no mês",
@@ -198,6 +200,8 @@ export function nomeDaLinha(tabela: string, l: Record<string, unknown> | null | 
       return s(l.codigo) && s(l.nome) ? `${l.codigo} ${l.nome}` : s(l.nome);
     case "fin_estoque_contagens":
       return typeof l.data === "string" ? `Contagem de ${l.data.split("-").reverse().join("/")}` : null;
+    case "fin_estoque_vendas":
+      return typeof l.mes === "string" ? `Vendas de ${l.mes.slice(5, 7)}/${l.mes.slice(0, 4)}` : null;
     case "fin_lancamentos": {
       const d = s(l.descricao);
       const v = typeof l.valor_total === "number" ? moeda.format(l.valor_total) : null;
