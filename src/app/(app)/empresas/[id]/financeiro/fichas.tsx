@@ -2,9 +2,10 @@ import { CookingPot } from "lucide-react";
 import { BotaoAcao } from "@/components/controles";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, cx, classeTabela as t } from "@/components/ui";
 import { carregarItensEstoque, carregarProdutos } from "@/lib/financeiro/consultas";
-import { custoFicha } from "@/lib/financeiro/estoque";
+import { custoFicha, paraBusca } from "@/lib/financeiro/estoque";
 import { mudarAtivacaoProduto } from "@/server/estoque";
 import { EditorFicha } from "./editor-ficha";
+import { FiltroLista } from "./filtro-lista";
 import { ImportarFichas } from "./importar-estoque";
 
 const real = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -56,6 +57,19 @@ export async function AbaFichas({ empresa }: { empresa: { id: string } }) {
                 margem. Informe em Editar.
               </p>
             )}
+            <FiltroLista
+              alvo="lista-fichas"
+              rotuloBusca="Buscar produto"
+              categorias={[...new Set(produtos.map((p) => p.categoria).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, "pt-BR"))}
+              situacoes={[
+                { valor: "sem-ficha", rotulo: "Sem ficha" },
+                { valor: "sem-preco", rotulo: "Sem preço de venda" },
+                { valor: "insumo-sem-custo", rotulo: "Insumo sem custo" },
+                { valor: "margem-negativa", rotulo: "Margem negativa" },
+                { valor: "ativo", rotulo: "Em linha" },
+                { valor: "fora-de-linha", rotulo: "Fora de linha" },
+              ]}
+            />
             <table className={t.tabela}>
               <thead className={t.cabeca}>
                 <tr>
@@ -69,9 +83,24 @@ export async function AbaFichas({ empresa }: { empresa: { id: string } }) {
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="lista-fichas">
                 {linhas.map((p) => (
-                  <tr key={p.id} className={cx(t.linha, !p.ativo && "text-slate-400")}>
+                  <tr
+                    key={p.id}
+                    className={cx(t.linha, !p.ativo && "text-slate-400")}
+                    data-filtro=""
+                    data-busca={paraBusca(`${p.nome} ${p.categoria ?? ""}`)}
+                    data-categoria={p.categoria ?? ""}
+                    data-situacoes={[
+                      p.ativo ? "ativo" : "fora-de-linha",
+                      !p.ficha.length && "sem-ficha",
+                      p.tabela === null && "sem-preco",
+                      p.ficha.length > 0 && p.semCusto > 0 && "insumo-sem-custo",
+                      p.margem !== null && p.margem < 0 && "margem-negativa",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
                     <td className="px-5 py-2">
                       {p.nome}
                       {!p.ativo ? (
