@@ -4,7 +4,7 @@ import { BotaoAcao } from "@/components/controles";
 import { Formulario } from "@/components/formulario";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, classeInput, cx, classeTabela as t } from "@/components/ui";
 import { carregarContagens, carregarItensEstoque } from "@/lib/financeiro/consultas";
-import { linhaComCusto, resumoContagem, valorLinha } from "@/lib/financeiro/estoque";
+import { MEDIDAS_CONTEUDO, linhaComCusto, medidaPadronizada, resumoContagem, valorLinha } from "@/lib/financeiro/estoque";
 import { paraCampoBR } from "@/lib/numeros";
 import { apagarContagem, fecharContagem, reabrirContagem, salvarCustos } from "@/server/estoque";
 import { ImportarContagem, ImportarCustos } from "./importar-estoque";
@@ -206,6 +206,8 @@ function DetalheContagem({ contagem: c }: { contagem: ContagemComValores }) {
 export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
   const itens = await carregarItensEstoque(empresa.id);
   const semCusto = itens.filter((i) => !i.fora_do_cmv && i.custo_unitario === null).length;
+  // Conteúdo de 1 unidade (0021): só aparece depois da migração e só para insumo contado por unidade, pacote, caixa...
+  const comConteudo = itens.length > 0 && "conteudo" in itens[0];
   return (
     <div className="space-y-6">
       <Cartao>
@@ -231,6 +233,11 @@ export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
                     <tr>
                       <th className={t.th}>Insumo</th>
                       <th className={`${t.th} w-40`}>Custo por unidade</th>
+                      {comConteudo && (
+                        <th className={`${t.th} w-56`} title="Para a ficha técnica aceitar g ou ml em insumo contado por unidade">
+                          Conteúdo de 1 unidade
+                        </th>
+                      )}
                       <th className={`${t.th} w-24 text-center`}>Fora do CMV</th>
                     </tr>
                   </thead>
@@ -255,6 +262,37 @@ export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
                             <span className="whitespace-nowrap text-xs text-slate-500">/ {i.unidade}</span>
                           </label>
                         </td>
+                        {comConteudo && (
+                          <td className="px-5 py-2">
+                            {medidaPadronizada(i.unidade) ? (
+                              <span className="text-xs text-slate-400">já em {medidaPadronizada(i.unidade)}</span>
+                            ) : (
+                              <label className="flex items-center gap-1.5">
+                                <span className="whitespace-nowrap text-xs text-slate-500">1 {i.unidade} =</span>
+                                <input
+                                  name={`conteudo_${i.id}`}
+                                  defaultValue={paraCampoBR(i.conteudo)}
+                                  inputMode="decimal"
+                                  placeholder="—"
+                                  aria-label={`Conteúdo de 1 ${i.unidade} de ${i.nome}`}
+                                  className={cx(classeInput, "w-20 px-2 py-1 text-right tabular-nums")}
+                                />
+                                <select
+                                  name={`medida_${i.id}`}
+                                  defaultValue={i.conteudo_medida ?? "g"}
+                                  aria-label={`Medida do conteúdo de ${i.nome}`}
+                                  className={cx(classeInput, "w-16 px-2 py-1")}
+                                >
+                                  {MEDIDAS_CONTEUDO.map((m) => (
+                                    <option key={m} value={m}>
+                                      {m}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                          </td>
+                        )}
                         <td className="px-5 py-2 text-center">
                           <input
                             type="checkbox"
@@ -276,7 +314,8 @@ export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
       <p className="text-xs text-slate-500">
         O custo é por unidade contada: se o café é contado em kg, o custo é do kg. Marque como fora do CMV o que é
         contado mas não é custo da mercadoria vendida (material de limpeza, por exemplo): entra na contagem com valor zero.
-        Mudar um custo atualiza as contagens em rascunho; as fechadas guardam o custo do dia em que foram fechadas.
+        Mudar um custo atualiza as contagens em rascunho; as fechadas guardam o custo do dia em que foram fechadas. O conteúdo de 1
+        unidade (ex.: 1 un de leite = 1 L) só serve para a ficha técnica aceitar g ou ml; não muda a contagem.
       </p>
       <Regra />
     </div>

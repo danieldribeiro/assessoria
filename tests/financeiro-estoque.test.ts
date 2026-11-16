@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { cmvTeorico, custoFicha, lerContagem, lerCustos, lerFichas, lerVendas, numeroCelula, resumoContagem, valorLinha, variacoesEstoque } from "@/lib/financeiro/estoque";
+import { cmvTeorico, custoFicha, lerContagem, lerCustos, lerFichas, lerVendas, medidaInicial, medidaPadronizada, naMedida, numeroCelula, opcoesMedida, resumoContagem, valorLinha, variacoesEstoque } from "@/lib/financeiro/estoque";
 import { ID_VARIACAO_ESTOQUE, montarDre, type Parcela } from "@/lib/financeiro/painel";
 import type { ContaPlano, Lancamento } from "@/lib/financeiro/dominio";
 import { lerPlanilha } from "@/lib/xlsx";
@@ -210,5 +210,30 @@ describe("fichas técnicas", () => {
     expect(r.vendaComFicha).toBe(105000);
     expect(r.semFicha).toEqual({ produtos: 1, venda: 31200 });
     expect(r.linhas[1]).toMatchObject({ custoUnitario: null, cmv: null });
+  });
+});
+
+describe("medidas da ficha técnica", () => {
+  it("insumo em kg aceita g e kg", () => {
+    const op = opcoesMedida({ unidade: "Kg", conteudo: null, conteudo_medida: null });
+    expect(op.map((o) => o.medida)).toEqual(["g", "kg"]);
+    expect(medidaInicial(op)).toEqual({ medida: "g", fator: 0.001 });
+    expect(100 * medidaInicial(op).fator * 100).toBeCloseTo(10); // 100 g a R$ 100,00/kg = R$ 10,00
+    expect(naMedida(0.02, 0.001)).toBe(20);
+  });
+  it("insumo por unidade só converte com o conteúdo informado", () => {
+    expect(opcoesMedida({ unidade: "un", conteudo: null, conteudo_medida: null })).toEqual([{ medida: "un", fator: 1 }]);
+    const op = opcoesMedida({ unidade: "un", conteudo: 100, conteudo_medida: "g" });
+    expect(op.map((o) => o.medida)).toEqual(["un", "g", "kg"]);
+    const g = op.find((o) => o.medida === "g")!;
+    expect(5 * g.fator).toBeCloseTo(0.05); // 5 g de um pacote de 100 g
+    const leite = opcoesMedida({ unidade: "un", conteudo: 1, conteudo_medida: "L" });
+    expect(medidaInicial(leite).medida).toBe("ml");
+    expect(270 * medidaInicial(leite).fator).toBeCloseTo(0.27);
+  });
+  it("reconhece litros escritos de vários jeitos", () => {
+    expect(medidaPadronizada("lt")).toBe("L");
+    expect(medidaPadronizada("Litros")).toBe("L");
+    expect(medidaPadronizada("pct")).toBeNull();
   });
 });

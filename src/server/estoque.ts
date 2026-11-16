@@ -2,7 +2,7 @@
 
 // Estoque e CMV (migração 0018). As planilhas são lidas no navegador (src/lib/xlsx.ts e src/lib/financeiro/estoque.ts);
 // aqui chegam só os itens, conferidos de novo antes de gravar.
-import { chaveNome, type FichaImportada, type ItemImportado, type VendaImportada } from "@/lib/financeiro/estoque";
+import { MEDIDAS_CONTEUDO, chaveNome, type FichaImportada, type ItemImportado, type VendaImportada } from "@/lib/financeiro/estoque";
 import { lerNumeroBR } from "@/lib/numeros";
 import { criarCliente } from "@/lib/supabase/server";
 import { atualizarTelas, exigir, marcado, texto } from "@/server/util";
@@ -80,13 +80,13 @@ export async function apagarContagem(id: string) {
   atualizarTelas();
 }
 
-type Mudanca = { id: string; custo_unitario: number | null; fora_do_cmv: boolean };
+type Mudanca = { id: string; custo_unitario: number | null; fora_do_cmv: boolean; conteudo?: number | null; conteudo_medida?: string | null };
 
 async function gravarMudancas(empresaId: string, mudancas: Mudanca[]) {
   const supabase = await criarCliente();
   const resultados = await Promise.all(
     mudancas.map((m) =>
-      supabase.from("fin_estoque_itens").update({ custo_unitario: m.custo_unitario, fora_do_cmv: m.fora_do_cmv }).eq("id", m.id).eq("empresa_id", empresaId),
+      supabase.from("fin_estoque_itens").update(m.conteudo === undefined ? { custo_unitario: m.custo_unitario, fora_do_cmv: m.fora_do_cmv } : { custo_unitario: m.custo_unitario, fora_do_cmv: m.fora_do_cmv, conteudo: m.conteudo, conteudo_medida: m.conteudo_medida ?? null }).eq("id", m.id).eq("empresa_id", empresaId),
     ),
   );
   return resultados.find((r) => r.error)?.error ?? null;
@@ -94,10 +94,17 @@ async function gravarMudancas(empresaId: string, mudancas: Mudanca[]) {
 
 async function itensAtuais(empresaId: string) {
   const supabase = await criarCliente();
-  const { data, error } = await supabase.from("fin_estoque_itens").select("id, nome, custo_unitario, fora_do_cmv").eq("empresa_id", empresaId);
+  // "*": conteudo e conteudo_medida só existem depois da 0021.
+  const { data, error } = await supabase.from("fin_estoque_itens").select("*").eq("empresa_id", empresaId);
   exigir(error);
-  return (data ?? []).map((i) => ({ ...i, custo_unitario: i.custo_unitario === null ? null : Number(i.custo_unitario) })) as Mudanca[] &
-    { nome: string }[];
+  return (data ?? []).map((i) => ({
+    id: i.id as string,
+    nome: i.nome as string,
+    fora_do_cmv: i.fora_do_cmv as boolean,
+    custo_unitario: i.custo_unitario === null ? null : Number(i.custo_unitario),
+    conteudo: "conteudo" in i ? (i.conteudo === null ? null : Number(i.conteudo)) : undefined,
+    conteudo_medida: "conteudo_medida" in i ? ((i.conteudo_medida as string | null) ?? null) : undefined,
+  }));
 }
 
 // Tabela de insumos: campos custo_<id> e fora_<id>. Grava só o que mudou.
@@ -111,7 +118,21 @@ export async function salvarCustos(empresaId: string, dados: FormData) {
     const custo = leitura.estado === "valido" ? leitura.valor : null;
     if (custo !== null && custo < 0) return { erro: `Custo de ${item.nome}: não pode ser negativo.` };
     const fora = marcado(dados, `fora_${item.id}`);
-    if (custo !== item.custo_unitario || fora !== item.fora_do_cmv) mudancas.push({ id: item.id, custo_unitario: custo, fora_do_cmv: fora });
+    const mudanca: Mudanca = { id: item.id, custo_unitario: custo, fora_do_cmv: fora };
+    let mudou = custo !== item.custo_unitario || fora !== item.fora_do_cmv;
+    // Conteúdo de 1 unidade (0021): vazio apaga; com número, guarda junto com a medida.
+    if (item.conteudo !== undefined && dados.has(`conteudo_${item.id}`)) {
+      const c = lerNumeroBR(texto(dados, `conteudo_${item.id}`));
+      if (c.estado === "invalido") return { erro: `Conteúdo de ${item.nome}: “${c.texto}” não é um número. Ex.: 100 ou 1,5.` };
+      const conteudo = c.estado === "valido" ? c.valor : null;
+      if (conteudo !== null && conteudo <= 0) return { erro: `Conteúdo de ${item.nome}: precisa ser maior que zero.` };
+      const medida = conteudo === null ? null : texto(dados, `medida_${item.id}`);
+      if (medida !== null && !MEDIDAS_CONTEUDO.includes(medida)) return { erro: `Conteúdo de ${item.nome}: escolha g, kg, ml ou L.` };
+      mudanca.conteudo = conteudo;
+      mudanca.conteudo_medida = medida;
+      if (conteudo !== item.conteudo || medida !== item.conteudo_medida) mudou = true;
+    }
+    if (mudou) mudancas.push(mudanca);
   }
   if (!mudancas.length) return;
   const erro = await gravarMudancas(empresaId, mudancas);

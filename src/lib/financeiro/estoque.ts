@@ -14,6 +14,8 @@ export type ItemEstoque = {
   custo_unitario: number | null;
   fora_do_cmv: boolean;
   ativo: boolean;
+  conteudo?: number | null; // 0021: quanto vale 1 unidade contada (ex.: 1 un = 100 g)
+  conteudo_medida?: string | null;
 };
 
 export type Contagem = {
@@ -363,3 +365,53 @@ export function cmvTeorico(
     comInsumoSemCusto: linhas.filter((l) => l.semCusto > 0).length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Medidas na ficha técnica: digitar em g ou ml e gravar na unidade em que o insumo é contado
+// ---------------------------------------------------------------------------
+
+const MEDIDAS: Record<string, { tipo: "massa" | "volume"; base: number }> = {
+  g: { tipo: "massa", base: 1 },
+  kg: { tipo: "massa", base: 1000 },
+  ml: { tipo: "volume", base: 1 },
+  L: { tipo: "volume", base: 1000 },
+};
+export const MEDIDAS_CONTEUDO = Object.keys(MEDIDAS);
+
+// "Kg", "KG", "kilo" → "kg"; "l", "lt", "litro" → "L"; o resto (un, pct, cx...) não é medida.
+export function medidaPadronizada(unidade: string | null | undefined): string | null {
+  const u = String(unidade ?? "").trim().toLowerCase().replace(/\.$/, "");
+  if (["g", "gr", "grama", "gramas"].includes(u)) return "g";
+  if (["kg", "kilo", "quilo", "kgs"].includes(u)) return "kg";
+  if (["ml", "mililitro", "mililitros"].includes(u)) return "ml";
+  if (["l", "lt", "litro", "litros"].includes(u)) return "L";
+  return null;
+}
+
+// fator = quantas unidades contadas cabem em 1 da medida escolhida (ex.: insumo em kg, medida g → 0,001).
+export type OpcaoMedida = { medida: string; fator: number };
+
+export function opcoesMedida(item: Pick<ItemEstoque, "unidade" | "conteudo" | "conteudo_medida">): OpcaoMedida[] {
+  const propria = medidaPadronizada(item.unidade);
+  if (propria) {
+    const { tipo, base } = MEDIDAS[propria];
+    return Object.entries(MEDIDAS)
+      .filter(([, m]) => m.tipo === tipo)
+      .map(([medida, m]) => ({ medida, fator: m.base / base }));
+  }
+  const opcoes: OpcaoMedida[] = [{ medida: item.unidade, fator: 1 }];
+  const cm = item.conteudo_medida ? MEDIDAS[item.conteudo_medida] : undefined;
+  if (cm && item.conteudo && item.conteudo > 0) {
+    const total = item.conteudo * cm.base; // 1 unidade contada, em g ou ml
+    for (const [medida, m] of Object.entries(MEDIDAS)) if (m.tipo === cm.tipo) opcoes.push({ medida, fator: m.base / total });
+  }
+  return opcoes;
+}
+
+// Medida mais natural para digitar uma porção: g ou ml quando há; senão a própria unidade contada.
+export function medidaInicial(opcoes: OpcaoMedida[]) {
+  return opcoes.find((o) => o.medida === "g" || o.medida === "ml") ?? opcoes[0];
+}
+
+// Valor na medida escolhida, sem a sujeira do ponto flutuante (0,02 kg → 20 g, não 20,000000000000004).
+export const naMedida = (quantidadeContada: number, fator: number) => Number((quantidadeContada / fator).toFixed(6));
