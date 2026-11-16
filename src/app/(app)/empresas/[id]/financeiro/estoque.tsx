@@ -204,7 +204,8 @@ function DetalheContagem({ contagem: c }: { contagem: ContagemComValores }) {
 
 // Insumos (0018): custo por unidade contada (kg, pacote, unidade) e a marca "fora do CMV" (limpeza, por exemplo).
 export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
-  const itens = await carregarItensEstoque(empresa.id);
+  // Em ordem alfabética, como no editor de fichas (a categoria aparece embaixo do nome).
+  const itens = (await carregarItensEstoque(empresa.id)).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   const semCusto = itens.filter((i) => !i.fora_do_cmv && i.custo_unitario === null).length;
   // Conteúdo de 1 unidade (0021): só aparece depois da migração e só para insumo contado por unidade, pacote, caixa...
   const comConteudo = itens.length > 0 && "conteudo" in itens[0];
