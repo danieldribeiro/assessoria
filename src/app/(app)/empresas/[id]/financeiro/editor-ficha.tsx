@@ -4,15 +4,25 @@ import { Plus, Trash2 } from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 import { avisar } from "@/components/avisos";
 import { Botao, classeBotao, classeInput, cx } from "@/components/ui";
+import { medidaInicial, naMedida, opcoesMedida, type OpcaoMedida } from "@/lib/financeiro/estoque";
 import { lerNumeroBR, mensagemNumeroInvalido, paraCampoBR } from "@/lib/numeros";
 import { salvarFicha } from "@/server/estoque";
 
-type Insumo = { id: string; nome: string; unidade: string; custo: number | null };
-type Linha = { chave: number; item_id: string; quantidade: string };
+export type InsumoFicha = {
+  id: string;
+  nome: string;
+  unidade: string;
+  custo: number | null;
+  conteudo: number | null;
+  conteudo_medida: string | null;
+};
+type Linha = { chave: number; item_id: string; quantidade: string; medida: string };
 
 const real = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
+const qtd = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 });
 
-// Ficha técnica de um produto: quanto de cada insumo vai em uma unidade vendida, na unidade em que o insumo é contado.
+// Ficha técnica de um produto: quanto de cada insumo vai em uma unidade vendida.
+// A quantidade pode ser digitada em g ou ml; grava convertida para a unidade em que o insumo é contado.
 export function EditorFicha({
   produto,
   ficha,
@@ -20,35 +30,63 @@ export function EditorFicha({
 }: {
   produto: { id: string; nome: string };
   ficha: { item_id: string; quantidade: number }[];
-  insumos: Insumo[];
+  insumos: InsumoFicha[];
 }) {
   const dialogo = useRef<HTMLDialogElement>(null);
   const proxima = useRef(0);
-  const novaLinha = (item_id = "", quantidade = ""): Linha => ({ chave: proxima.current++, item_id, quantidade });
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [erro, setErro] = useState<string>();
   const [ocupado, iniciar] = useTransition();
   const porId = new Map(insumos.map((i) => [i.id, i]));
+  const opcoes = (id: string): OpcaoMedida[] => {
+    const i = porId.get(id);
+    return i ? opcoesMedida(i) : [];
+  };
+  const fatorDe = (l: Linha) => opcoes(l.item_id).find((o) => o.medida === l.medida)?.fator ?? 1;
 
+  // Linha com a quantidade já na medida mais natural (ex.: 0,02 kg aparece como 20 g).
+  function novaLinha(item_id = "", contada?: number): Linha {
+    const o = item_id ? medidaInicial(opcoes(item_id)) : undefined;
+    return {
+      chave: proxima.current++,
+      item_id,
+      medida: o?.medida ?? "",
+      quantidade: contada === undefined || !o ? "" : paraCampoBR(naMedida(contada, o.fator)),
+    };
+  }
+
+  // Custo de cada linha: quantidade digitada × fator da medida × custo por unidade contada.
+  const custoLinha = (l: Linha) => {
+    const q = lerNumeroBR(l.quantidade);
+    const c = porId.get(l.item_id)?.custo;
+    if (!l.item_id || q.estado !== "valido") return undefined;
+    return c === null || c === undefined ? null : q.valor * fatorDe(l) * c;
+  };
   const custo = linhas.reduce(
     (a, l) => {
-      const q = lerNumeroBR(l.quantidade);
-      const c = porId.get(l.item_id)?.custo;
-      if (!l.item_id || q.estado !== "valido") return a;
-      if (c === null || c === undefined) return { ...a, semCusto: a.semCusto + 1 };
-      return { ...a, total: a.total + q.valor * c };
+      const v = custoLinha(l);
+      if (v === undefined) return a;
+      return v === null ? { ...a, semCusto: a.semCusto + 1 } : { ...a, total: a.total + v };
     },
     { total: 0, semCusto: 0 },
   );
 
   function abrir() {
     setErro(undefined);
-    setLinhas(ficha.length ? ficha.map((l) => novaLinha(l.item_id, paraCampoBR(l.quantidade))) : [novaLinha()]);
+    setLinhas(ficha.length ? ficha.map((l) => novaLinha(l.item_id, l.quantidade)) : [novaLinha()]);
     dialogo.current?.showModal();
   }
 
-  const mudar = (chave: number, campo: "item_id" | "quantidade", valor: string) =>
-    setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, [campo]: valor } : l)));
+  const trocar = (chave: number, mudanca: (l: Linha) => Partial<Linha>) =>
+    setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, ...mudanca(l) } : l)));
+
+  // Trocar a medida mantém a mesma quantidade física (20 g → 0,02 kg).
+  function trocarMedida(l: Linha, medida: string) {
+    const q = lerNumeroBR(l.quantidade);
+    const novo = opcoes(l.item_id).find((o) => o.medida === medida)?.fator ?? 1;
+    const quantidade = q.estado === "valido" ? paraCampoBR(naMedida(q.valor * fatorDe(l), novo)) : l.quantidade;
+    trocar(l.chave, () => ({ medida, quantidade }));
+  }
 
   function salvar() {
     setErro(undefined);
@@ -60,7 +98,7 @@ export function EditorFicha({
       const nome = porId.get(l.item_id)?.nome ?? "insumo";
       if (q.estado === "invalido") return setErro(mensagemNumeroInvalido(`Quantidade de ${nome}`, q.texto));
       if (q.estado === "vazio" || q.valor <= 0) return setErro(`Informe a quantidade de ${nome} (maior que zero).`);
-      itens.push({ item_id: l.item_id, quantidade: q.valor });
+      itens.push({ item_id: l.item_id, quantidade: Number((q.valor * fatorDe(l)).toFixed(6)) });
     }
     iniciar(async () => {
       const r = await salvarFicha(produto.id, itens);
@@ -94,17 +132,23 @@ export function EditorFicha({
           </div>
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
             <p className="text-sm text-slate-600">
-              Quanto de cada insumo vai em <strong>uma unidade vendida</strong>, na unidade em que o insumo é contado. Ex.: se o
-              café é contado em kg e a dose leva 18 g, informe 0,018.
+              Quanto de cada insumo vai em <strong>uma unidade vendida</strong>. Escolha a medida (g, ml…) e o Axis converte para a
+              unidade em que o insumo é contado no estoque.
             </p>
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {linhas.map((l) => {
                 const insumo = porId.get(l.item_id);
+                const ops = opcoes(l.item_id);
+                const v = custoLinha(l);
                 return (
-                  <li key={l.chave} className="grid grid-cols-[minmax(0,1fr)_6.5rem_3rem_auto] items-center gap-2">
+                  <li key={l.chave} className="grid grid-cols-[minmax(0,1fr)_5.5rem_5rem_auto] items-center gap-x-2 gap-y-1">
                     <select
                       value={l.item_id}
-                      onChange={(e) => mudar(l.chave, "item_id", e.target.value)}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const o = id ? medidaInicial(opcoesMedida(porId.get(id)!)) : undefined;
+                        trocar(l.chave, () => ({ item_id: id, medida: o?.medida ?? "" }));
+                      }}
                       aria-label="Insumo"
                       className={cx(classeInput, "pr-8")}
                     >
@@ -117,13 +161,26 @@ export function EditorFicha({
                     </select>
                     <input
                       value={l.quantidade}
-                      onChange={(e) => mudar(l.chave, "quantidade", e.target.value)}
+                      onChange={(e) => trocar(l.chave, () => ({ quantidade: e.target.value }))}
                       inputMode="decimal"
-                      placeholder="0,000"
+                      placeholder="0"
                       aria-label={`Quantidade de ${insumo?.nome ?? "insumo"}`}
                       className={cx(classeInput, "text-right tabular-nums")}
                     />
-                    <span className="truncate text-xs text-slate-500">{insumo?.unidade ?? ""}</span>
+                    <select
+                      value={l.medida}
+                      onChange={(e) => trocarMedida(l, e.target.value)}
+                      disabled={ops.length < 2}
+                      aria-label="Medida"
+                      className={cx(classeInput, "pr-7 disabled:opacity-100")}
+                    >
+                      {ops.length === 0 && <option value="">—</option>}
+                      {ops.map((o) => (
+                        <option key={o.medida} value={o.medida}>
+                          {o.medida}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))}
@@ -132,11 +189,36 @@ export function EditorFicha({
                     >
                       <Trash2 className="size-4" />
                     </button>
+                    {insumo && (
+                      <p className="col-span-full flex flex-wrap justify-between gap-x-3 text-xs text-slate-500">
+                        <span>
+                          {insumo.custo === null ? (
+                            <span className="text-amber-700">sem custo cadastrado</span>
+                          ) : (
+                            <>
+                              {real.format(insumo.custo)} por {insumo.unidade}
+                            </>
+                          )}
+                          {insumo.conteudo && insumo.conteudo_medida && (
+                            <>
+                              {" "}
+                              · 1 {insumo.unidade} = {qtd.format(insumo.conteudo)} {insumo.conteudo_medida}
+                            </>
+                          )}
+                          {ops.length < 2 && " · para usar g ou ml, informe o conteúdo de 1 unidade na aba Insumos"}
+                        </span>
+                        {typeof v === "number" && <span className="font-medium tabular-nums text-slate-700">{real.format(v)}</span>}
+                      </p>
+                    )}
                   </li>
                 );
               })}
             </ul>
-            <button type="button" onClick={() => setLinhas((ls) => [...ls, novaLinha()])} className={classeBotao("secundario", true)}>
+            <button
+              type="button"
+              onClick={() => setLinhas((ls) => [...ls, novaLinha()])}
+              className={classeBotao("secundario", true)}
+            >
               <Plus />
               Adicionar insumo
             </button>

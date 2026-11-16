@@ -295,7 +295,12 @@ export async function carregarItensEstoque(empresaId: string) {
   const supabase = await criarCliente();
   const { data, error } = await supabase.from("fin_estoque_itens").select("*").eq("empresa_id", empresaId).order("categoria", { nullsFirst: false }).order("nome");
   if (error) throw new Error(error.message);
-  return (data ?? []).map((i) => ({ ...i, custo_unitario: numeroOuNulo(i.custo_unitario) })) as ItemEstoque[];
+  // conteudo só existe depois da 0021: sem ela, fica undefined e a ficha não converte g/ml de insumo contado por unidade.
+  return (data ?? []).map((i) => ({
+    ...i,
+    custo_unitario: numeroOuNulo(i.custo_unitario),
+    ...("conteudo" in i ? { conteudo: numeroOuNulo(i.conteudo) } : {}),
+  })) as ItemEstoque[];
 }
 
 const lerLinha = (l: Record<string, unknown>) =>
