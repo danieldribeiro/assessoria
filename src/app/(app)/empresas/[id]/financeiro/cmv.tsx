@@ -169,7 +169,7 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
               <strong>
                 {moeda(Math.abs(totalTabela - totalCobrado))} {totalCobrado < totalTabela ? "abaixo" : "acima"} da tabela
               </strong>
-              . A coluna “Dif. da tabela” mostra em quais produtos.
+              . Na tabela “Por produto”, o preço médio mostra em quais.
             </p>
           )}
           {comPreco && tabela.size === 0 && (
@@ -226,7 +226,9 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
               <th className={`${t.th} text-right`}>Qtd.</th>
               <th className={`${t.th} hidden text-right sm:table-cell`}>Vendas</th>
               <th className={`${t.th} hidden text-right md:table-cell`}>Custo unit.</th>
-              {tabela.size > 0 && <th className={`${t.th} hidden text-right lg:table-cell`}>Dif. da tabela</th>}
+              <th className={`${t.th} hidden text-right md:table-cell`} title="Total vendido ÷ quantidade: o que o caixa cobrou em média, já com descontos">
+                Preço médio
+              </th>
               <th className={`${t.th} text-right`}>CMV teórico</th>
               <th className={`${t.th} text-right`}>% da venda</th>
             </tr>
@@ -256,16 +258,25 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
                   <td className="hidden whitespace-nowrap px-5 py-2 text-right tabular-nums md:table-cell">
                     {l.custoUnitario === null ? "—" : real.format(l.custoUnitario)}
                   </td>
-                  {tabela.size > 0 && (
-                    <td className="hidden whitespace-nowrap px-5 py-2 text-right tabular-nums lg:table-cell">
-                      {(() => {
-                        const t2 = pelaTabela(l);
-                        if (t2 === null || l.venda === null) return "—";
-                        const d = l.venda - t2;
-                        return Math.abs(d) < 1 ? "—" : <span className={d < 0 ? "text-amber-700" : undefined}>{(d > 0 ? "+" : "−") + moeda(Math.abs(d))}</span>;
-                      })()}
-                    </td>
-                  )}
+                  <td className="hidden whitespace-nowrap px-5 py-2 text-right tabular-nums md:table-cell">
+                    {(() => {
+                      if (l.venda === null || l.quantidade <= 0) return "—";
+                      const medio = l.venda / 100 / l.quantidade;
+                      const preco = l.produto_id ? tabela.get(l.produto_id) : undefined;
+                      const desvio = preco ? (medio - preco) / preco : null;
+                      return (
+                        <>
+                          {real.format(medio)}
+                          {desvio !== null && Math.abs(desvio) > 0.01 && (
+                            <span className={cx("block text-xs", desvio < 0 ? "text-amber-700" : "text-slate-500")}>
+                              {desvio > 0 ? "+" : "−"}
+                              {pct.format(Math.abs(desvio))} da tabela ({real.format(preco!)})
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </td>
                   <td className="whitespace-nowrap px-5 py-2 text-right tabular-nums">{l.cmv === null ? "—" : moeda(l.cmv)}</td>
                   <td className={cx("whitespace-nowrap px-5 py-2 text-right tabular-nums", p !== null && p > 1 && "text-red-700")}>
                     {p === null ? "—" : pct.format(p)}
