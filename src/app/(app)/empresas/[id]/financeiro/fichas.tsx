@@ -30,7 +30,11 @@ export async function AbaFichas({ empresa }: { empresa: { id: string } }) {
     })
     .sort((a, b) => Number(b.ativo) - Number(a.ativo) || Number(a.ficha.length > 0) - Number(b.ficha.length > 0) || a.nome.localeCompare(b.nome, "pt-BR"));
   const semFicha = linhas.filter((p) => p.ativo && !p.ficha.length).length;
-  const insumos = itens.filter((i) => i.ativo !== false && !i.fora_do_cmv).map((i) => ({ id: i.id, nome: i.nome, unidade: i.unidade, custo: i.custo_unitario, conteudo: i.conteudo ?? null, conteudo_medida: i.conteudo_medida ?? null }));
+  // Em ordem alfabética na lista do editor (a aba Insumos ordena por categoria).
+  const insumos = itens
+    .filter((i) => i.ativo !== false && !i.fora_do_cmv)
+    .map((i) => ({ id: i.id, nome: i.nome, unidade: i.unidade, custo: i.custo_unitario, conteudo: i.conteudo ?? null, conteudo_medida: i.conteudo_medida ?? null }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
   return (
     <div className="space-y-6">
