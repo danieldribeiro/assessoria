@@ -211,6 +211,19 @@ describe("fichas técnicas", () => {
     expect(r.semFicha).toEqual({ produtos: 1, venda: 31200 });
     expect(r.linhas[1]).toMatchObject({ custoUnitario: null, cmv: null });
   });
+  it("mês fechado usa o custo gravado, não o custo atual", () => {
+    const fichas = new Map([["latte", [{ item_id: "cafe", quantidade: 0.018 }]]]);
+    const hoje = new Map([["cafe", { custo_unitario: 129.9 }]]);
+    const vendas = [
+      { produto_id: "latte", nome_origem: "LATTE P", categoria_origem: null, quantidade: 10, valor: 150, custo_unitario: 2.6982, insumos_sem_custo: 1 },
+      { produto_id: "agua", nome_origem: "ÁGUA", categoria_origem: null, quantidade: 3, valor: 18, custo_unitario: null, insumos_sem_custo: 0 },
+    ];
+    const fechado = cmvTeorico(vendas, fichas, hoje, true);
+    expect(fechado.cmv).toBe(2698); // 10 × 2,6982 (café a 149,90 no fechamento)
+    expect(fechado.linhas[0].semCusto).toBe(1);
+    expect(fechado.semFicha.produtos).toBe(1);
+    expect(cmvTeorico(vendas, fichas, hoje).cmv).toBe(Math.round(10 * 0.018 * 129.9 * 100)); // aberto: custo de hoje
+  });
 });
 
 describe("medidas da ficha técnica", () => {

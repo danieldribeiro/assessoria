@@ -5,7 +5,7 @@ import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela
 import type { ContaPlano } from "@/lib/financeiro/dominio";
 import { carregarCmvReal, carregarItensEstoque, carregarProdutos, carregarVendas } from "@/lib/financeiro/consultas";
 import { cmvTeorico } from "@/lib/financeiro/estoque";
-import { apagarVendas } from "@/server/estoque";
+import { apagarVendas, fecharCmvMes, reabrirCmvMes } from "@/server/estoque";
 import { ImportarVendas } from "./importar-estoque";
 
 const moeda = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -41,7 +41,10 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
   }
 
   const fichas = new Map(produtos.map((p) => [p.id, p.ficha]));
-  const teorico = cmvTeorico(aberta.linhas, fichas, new Map(itens.map((i) => [i.id, i])));
+  // Fechar o mês (0023): só aparece depois da migração. Fechado, o teórico usa os custos gravados no fechamento.
+  const podeFechar = "fechado_em" in aberta;
+  const fechado = !!aberta.fechado_em;
+  const teorico = cmvTeorico(aberta.linhas, fichas, new Map(itens.map((i) => [i.id, i])), fechado);
   const realMes = await carregarCmvReal(empresa.id, contas, aberta.mes);
   const linhas = [...teorico.linhas].sort((a, b) => (b.venda ?? 0) - (a.venda ?? 0) || b.quantidade - a.quantidade);
   const pTeorico = parte(teorico.cmv, teorico.vendaComFicha);
@@ -52,14 +55,37 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
     <div className="space-y-6">
       <Cartao>
         <CabecalhoCartao titulo={`CMV de ${rotuloMes(aberta.mes)}`}>
-          <BotaoAcao
-            acao={apagarVendas.bind(null, aberta.id)}
-            pergunta={`Apagar as vendas de ${rotuloMes(aberta.mes)}? Os produtos e as fichas continuam.`}
-            aviso="Vendas apagadas"
-            className={classeBotao("perigo", true)}
-          >
-            Apagar vendas
-          </BotaoAcao>
+          {fechado ? (
+            <BotaoAcao
+              acao={reabrirCmvMes.bind(null, aberta.id)}
+              pergunta={`Reabrir o CMV de ${rotuloMes(aberta.mes)}? O teórico volta a usar o custo atual dos insumos até você fechar de novo.`}
+              aviso="Mês reaberto"
+              className={classeBotao("secundario", true)}
+            >
+              Reabrir o mês
+            </BotaoAcao>
+          ) : (
+            <>
+              <BotaoAcao
+                acao={apagarVendas.bind(null, aberta.id)}
+                pergunta={`Apagar as vendas de ${rotuloMes(aberta.mes)}? Os produtos e as fichas continuam.`}
+                aviso="Vendas apagadas"
+                className={classeBotao("perigo", true)}
+              >
+                Apagar vendas
+              </BotaoAcao>
+              {podeFechar && (
+                <BotaoAcao
+                  acao={fecharCmvMes.bind(null, aberta.id)}
+                  pergunta={`Fechar o CMV de ${rotuloMes(aberta.mes)}? O custo de cada ficha fica gravado como está hoje, e mudar o custo de um insumo depois não mexe mais neste mês.`}
+                  aviso="CMV do mês fechado"
+                  className={classeBotao("secundario", true)}
+                >
+                  Fechar o mês
+                </BotaoAcao>
+              )}
+            </>
+          )}
           <ImportarVendas empresaId={empresa.id} produtosComFicha={comFicha} />
         </CabecalhoCartao>
         {vendas.length > 1 && (
@@ -104,6 +130,21 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
               Arquivo {aberta.arquivo_nome}, importado em {dataBR(aberta.criado_em.slice(0, 10))}.
             </p>
           )}
+          {podeFechar && (
+            <p className="text-xs text-slate-500">
+              {fechado ? (
+                <>
+                  <Etiqueta tom="cinza">fechado</Etiqueta> CMV teórico com os custos de {dataBR(aberta.fechado_em!.slice(0, 10))}, quando o mês foi
+                  fechado. Mudar o custo de um insumo não mexe mais neste mês.
+                </>
+              ) : (
+                <>
+                  <Etiqueta tom="ambar">aberto</Etiqueta> CMV teórico com o custo atual dos insumos: muda sempre que um custo muda. Feche o mês
+                  quando os custos estiverem certos para ele.
+                </>
+              )}
+            </p>
+          )}
           {teorico.semFicha.produtos > 0 && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
               {teorico.semFicha.produtos} {teorico.semFicha.produtos === 1 ? "produto vendido está" : "produtos vendidos estão"} sem ficha
@@ -121,7 +162,7 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
               <Link href="?aba=insumos" className="font-medium underline">
                 aba Insumos
               </Link>
-              .
+              {fechado && " (e reabrir e fechar o mês de novo)"}.
             </p>
           )}
           {realMes.variacao === null ? (
@@ -206,7 +247,8 @@ function Numero({ rotulo, valor, nota, destaque }: { rotulo: string; valor: stri
 function Explicacao() {
   return (
     <p className="text-xs text-slate-500">
-      CMV teórico: para cada produto vendido, quantidade × custo da ficha técnica (com o custo atual dos insumos). CMV real:
+      CMV teórico: para cada produto vendido, quantidade × custo da ficha técnica, com o custo atual dos insumos enquanto o mês
+      está aberto e com o custo gravado no fechamento depois que o mês é fechado. CMV real:
       compras do mês (linha 5 da DRE, por competência) + estoque inicial − estoque final, pelas contagens fechadas. Real acima do
       teórico aponta perda, desperdício, porção maior que a ficha, consumo interno ou compra lançada no mês errado. Os percentuais
       são sobre o total vendido no relatório do PDV.

@@ -380,7 +380,7 @@ export async function carregarVendas(empresaId: string) {
   return (data ?? []).map(({ linhas, ...v }) => ({
     ...(v as VendaMes),
     linhas: ((linhas ?? []) as LinhaVenda[])
-      .map((l) => ({ ...l, quantidade: Number(l.quantidade), valor: l.valor === null ? null : Number(l.valor) }))
+      .map((l) => ({ ...l, quantidade: Number(l.quantidade), valor: l.valor === null ? null : Number(l.valor), ...("custo_unitario" in l ? { custo_unitario: numeroOuNulo(l.custo_unitario) } : {}) }))
       .sort((a, b) => a.ordem - b.ordem),
   }));
 }

@@ -224,7 +224,14 @@ export function variacoesEstoque(
 
 export type Produto = { id: string; empresa_id: string; nome: string; categoria: string | null; ativo: boolean };
 export type LinhaFicha = { id: string; produto_id: string; item_id: string; quantidade: number; ordem: number };
-export type VendaMes = { id: string; empresa_id: string; mes: string; arquivo_nome: string | null; criado_em: string };
+export type VendaMes = {
+  id: string;
+  empresa_id: string;
+  mes: string;
+  arquivo_nome: string | null;
+  criado_em: string;
+  fechado_em?: string | null; // 0023: CMV teórico do mês fechado (custos gravados); undefined antes da migração
+};
 export type LinhaVenda = {
   id: string;
   venda_id: string;
@@ -234,6 +241,8 @@ export type LinhaVenda = {
   quantidade: number;
   valor: number | null;
   ordem: number;
+  custo_unitario?: number | null; // 0023: custo da ficha gravado ao fechar o mês
+  insumos_sem_custo?: number;
 };
 export type VendaImportada = { nome: string; categoria: string | null; quantidade: number; valor: number | null };
 export type FichaImportada = { produto: string; categoria: string | null; itens: { insumo: string; unidade: string; quantidade: number }[] };
@@ -332,16 +341,19 @@ export type LinhaCmv = {
 
 // CMV teórico do mês: em cada produto vendido, quantidade × custo da ficha. Produto sem ficha fica de fora do total
 // e aparece em semFicha, com a venda dele, para mostrar quanto da venda está coberto.
+// Mês fechado (0023): usa o custo gravado em cada linha ao fechar, e não o custo atual dos insumos.
 export function cmvTeorico(
-  vendas: Pick<LinhaVenda, "produto_id" | "nome_origem" | "categoria_origem" | "quantidade" | "valor">[],
+  vendas: Pick<LinhaVenda, "produto_id" | "nome_origem" | "categoria_origem" | "quantidade" | "valor" | "custo_unitario" | "insumos_sem_custo">[],
   fichas: Map<string, { item_id: string; quantidade: number }[]>,
   itens: Map<string, Pick<ItemEstoque, "custo_unitario">>,
+  fechado = false,
 ) {
   const linhas: LinhaCmv[] = vendas.map((v) => {
     const ficha = v.produto_id ? fichas.get(v.produto_id) : undefined;
     const venda = v.valor === null ? null : Math.round(Number(v.valor) * 100);
-    if (!ficha?.length) return { produto_id: v.produto_id, nome: v.nome_origem, categoria: v.categoria_origem, quantidade: Number(v.quantidade), venda, custoUnitario: null, cmv: null, semCusto: 0 };
-    const { custo, semCusto } = custoFicha(ficha, itens);
+    const temFicha = fechado ? v.custo_unitario !== null && v.custo_unitario !== undefined : !!ficha?.length;
+    if (!temFicha) return { produto_id: v.produto_id, nome: v.nome_origem, categoria: v.categoria_origem, quantidade: Number(v.quantidade), venda, custoUnitario: null, cmv: null, semCusto: 0 };
+    const { custo, semCusto } = fechado ? { custo: Number(v.custo_unitario), semCusto: v.insumos_sem_custo ?? 0 } : custoFicha(ficha!, itens);
     return {
       produto_id: v.produto_id,
       nome: v.nome_origem,
