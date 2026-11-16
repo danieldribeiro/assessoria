@@ -235,7 +235,7 @@ export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
                       <th className={t.th}>Insumo</th>
                       <th className={`${t.th} w-40`}>Custo por unidade</th>
                       {comConteudo && (
-                        <th className={`${t.th} w-56`} title="Para a ficha técnica aceitar g ou ml em insumo contado por unidade">
+                        <th className={`${t.th} w-56`} title="Para a ficha técnica aceitar g, ml ou pacote em insumo contado por unidade, pacote ou caixa">
                           Conteúdo de 1 unidade
                         </th>
                       )}
