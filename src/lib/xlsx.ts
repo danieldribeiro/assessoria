@@ -98,7 +98,7 @@ export async function lerPlanilha(bytes: Uint8Array): Promise<Celula[][]> {
       const ref = /\br="([A-Z]+\d+)"/.exec(attrs)?.[1];
       const tipo = /\bt="(\w+)"/.exec(attrs)?.[1];
       const corpo = c[2] ?? "";
-      const v = /<v>([\s\S]*?)<\/v>/.exec(corpo)?.[1];
+      const v = /<v(?:\s[^>]*)?>([\s\S]*?)<\/v>/.exec(corpo)?.[1]; // <v xml:space="preserve"> quando o texto tem espaço nas pontas
       let valor: Celula = null;
       if (tipo === "s") valor = v !== undefined ? (compartilhados[Number(v)] ?? null) : null;
       else if (tipo === "inlineStr") valor = juntarT(corpo);
