@@ -196,6 +196,22 @@ export async function apagarVendas(id: string) {
   atualizarTelas();
 }
 
+// Fechar o CMV do mês (0023): grava o custo de cada ficha agora; mudar custo de insumo depois não mexe mais no mês.
+export async function fecharCmvMes(id: string) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_estoque_fechar_vendas", { p_id: id });
+  if (error) return falhaEstoque(error);
+  atualizarTelas();
+}
+
+// Reabrir: apaga os custos gravados e o mês volta a usar o custo atual dos insumos.
+export async function reabrirCmvMes(id: string) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_estoque_reabrir_vendas", { p_id: id });
+  if (error) return falhaEstoque(error);
+  atualizarTelas();
+}
+
 export async function importarFichas(empresaId: string, fichas: FichaImportada[]) {
   if (!Array.isArray(fichas) || fichas.length === 0) return { erro: "A planilha não tem fichas." };
   if (fichas.length > MAX_ITENS) return { erro: "Fichas demais na planilha." };
