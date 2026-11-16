@@ -10,6 +10,7 @@ import {
   carregarMovimentos,
   carregarPrevistos,
   carregarSaldos,
+  carregarVariacoes,
 } from "@/lib/financeiro/consultas";
 import { compararCodigo, NOME_ATIVIDADE, nomeSecaoDre } from "@/lib/financeiro/dominio";
 import { diaAnterior, montarFluxo } from "@/lib/financeiro/fluxo";
@@ -214,9 +215,12 @@ export const FERRAMENTAS: Ferramenta[] = [
     async executar(args) {
       const p = lerPeriodoArgs(args);
       const b = await base(args.empresa_id as string);
-      const lancamentos = await carregarLancamentos(b.empresa.id, p.inicio, p.fim, "competencia");
+      const [lancamentos, variacoes] = await Promise.all([
+        carregarLancamentos(b.empresa.id, p.inicio, p.fim, "competencia"),
+        b.estoqueAtivo ? carregarVariacoes(b.empresa.id, p.meses, p.inicio, p.fim) : Promise.resolve([]),
+      ]);
       const lista = parcelas(lancamentos, b.contas, "competencia", {}, p.inicio, p.fim);
-      const dre = montarDre(lista, p.meses, b.contas);
+      const dre = montarDre(lista, p.meses, b.contas, variacoes.map((v) => v.centavos));
       return {
         empresa: b.empresa.nome,
         periodo: { inicio: p.inicio, fim: p.fim },
@@ -235,6 +239,14 @@ export const FERRAMENTAS: Ferramenta[] = [
           ),
         })),
         fora_da_dre: dre.foraDaDre,
+        // Empresas com controle de estoque: a linha 5 já traz a variação; o resumo acima conta só os lançamentos.
+        ...(b.estoqueAtivo && {
+          variacao_estoque: variacoes.map((v) =>
+            v.centavos === null
+              ? { mes: v.mes.slice(0, 7), variacao: null, motivo: v.motivo === "mes_incompleto" ? "mês incompleto no período" : `falta contagem fechada de ${v.faltam.join(" e ")}` }
+              : { mes: v.mes.slice(0, 7), variacao: v.centavos / 100, estoque_inicial: v.inicial / 100, estoque_final: v.final / 100 },
+          ),
+        }),
       };
     },
   },

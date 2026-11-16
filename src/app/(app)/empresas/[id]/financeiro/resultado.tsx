@@ -2,9 +2,10 @@ import { Scale } from "lucide-react";
 import Link from "next/link";
 import { CabecalhoCartao, Cartao, Vazio, cx, classeTabela as t } from "@/components/ui";
 import { formatarValor } from "@/lib/datas";
-import { carregarLancamentos } from "@/lib/financeiro/consultas";
+import { carregarLancamentos, carregarVariacoes } from "@/lib/financeiro/consultas";
+import type { VariacaoMes } from "@/lib/financeiro/estoque";
 import type { ContaCaixa, ContaPlano } from "@/lib/financeiro/dominio";
-import { SECOES_DESPESA, montarDre, parcelas, variacao, type Filtros, type LinhaContaDre } from "@/lib/financeiro/painel";
+import { ID_VARIACAO_ESTOQUE, SECOES_DESPESA, montarDre, parcelas, variacao, type Filtros, type LinhaContaDre } from "@/lib/financeiro/painel";
 import { textoPeriodo, type Periodo } from "@/lib/financeiro/periodo";
 import { FiltroPeriodo } from "./filtro";
 import { FiltroCaixa, filtrosAtivos, linkLancamentos } from "./painel";
@@ -23,8 +24,10 @@ export async function AbaResultado({
   caixas,
   periodo,
   filtros,
+  estoqueAtivo = false,
 }: {
   empresa: { id: string };
+  estoqueAtivo?: boolean;
   contas: ContaPlano[];
   caixas: ContaCaixa[];
   periodo: Periodo;
@@ -32,19 +35,30 @@ export async function AbaResultado({
 }) {
   const { meses, inicio, fim } = periodo;
   const { inicio: inicioAnterior, fim: fimAnterior } = periodo.anterior;
-  const lancamentos = await carregarLancamentos(empresa.id, inicioAnterior, fim, "competencia");
+  // Variação de estoque (0018): só com o controle de estoque ligado e sem filtro de conta de caixa (estoque não é de uma conta).
+  const comEstoque = estoqueAtivo && !filtros.caixa;
+  const [lancamentos, variacoes, variacoesAnterior] = await Promise.all([
+    carregarLancamentos(empresa.id, inicioAnterior, fim, "competencia"),
+    comEstoque ? carregarVariacoes(empresa.id, meses, inicio, fim) : Promise.resolve([] as VariacaoMes[]),
+    comEstoque ? carregarVariacoes(empresa.id, periodo.anterior.meses, inicioAnterior, fimAnterior) : Promise.resolve([] as VariacaoMes[]),
+  ]);
   const filtro = { caixa: filtros.caixa };
-  const dre = montarDre(parcelas(lancamentos, contas, "competencia", filtro, inicio, fim), meses, contas);
+  const dre = montarDre(parcelas(lancamentos, contas, "competencia", filtro, inicio, fim), meses, contas, variacoes.map((v) => v.centavos));
   const dreAnterior = montarDre(
     parcelas(lancamentos, contas, "competencia", filtro, inicioAnterior, fimAnterior),
     periodo.anterior.meses,
+    [],
+    variacoesAnterior.map((v) => v.centavos),
   );
+  const semVariacao = variacoes.filter((v): v is Extract<VariacaoMes, { centavos: null }> => v.centavos === null);
   const totalAnterior = new Map(dreAnterior.linhas.map((l) => [l.numero, l.total]));
   const faturamento = dre.linhas[0].total;
   const despesas = -dre.linhas.filter((l) => DESPESA.has(l.numero)).reduce((a, l) => a + l.total, 0);
   const mostrarMeses = meses.length > 1;
   const link = (conta: string, secao: number) =>
-    linkLancamentos(empresa.id, "competencia", periodo.de, periodo.ate, { caixa: filtros.caixa, conta, secoes: [secao] });
+    conta === ID_VARIACAO_ESTOQUE
+      ? `?aba=contagens`
+      : linkLancamentos(empresa.id, "competencia", periodo.de, periodo.ate, { caixa: filtros.caixa, conta, secoes: [secao] });
   const vazio = dre.linhas.every((l) => l.total === 0 && l.valores.every((v) => v === 0));
 
   return (
@@ -150,6 +164,37 @@ export async function AbaResultado({
               })}
             </tbody>
           </table>
+        )}
+        {estoqueAtivo && !vazio && (
+          <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+            {filtros.caixa ? (
+              <p>Com filtro de conta de caixa, a linha 5 mostra só as compras, sem a variação de estoque.</p>
+            ) : (
+              <>
+                <p>
+                  Linha 5 com controle de estoque: compras do mês menos a variação de estoque (estoque final − estoque
+                  inicial, pelas{" "}
+                  <Link href="?aba=contagens" className="font-medium text-marca-700 hover:underline">
+                    contagens fechadas
+                  </Link>
+                  ). Estoque que cresceu reduz o custo; estoque que diminuiu aumenta.
+                </p>
+                {semVariacao.length > 0 && (
+                  <ul className="mt-1 list-disc pl-5 text-amber-700">
+                    {semVariacao.map((v) => (
+                      <li key={v.mes}>
+                        {nomeMes(v.mes)}: sem variação de estoque,{" "}
+                        {v.motivo === "mes_incompleto"
+                          ? "porque o período não pega o mês inteiro."
+                          : `falta a contagem fechada de ${v.faltam.map((d) => d.split("-").reverse().join("/")).join(" e de ")}.`}{" "}
+                        A linha 5 desse mês tem só as compras.
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
         )}
         {dre.foraDaDre !== 0 && (
           <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
