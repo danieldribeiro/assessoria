@@ -50,6 +50,19 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
   const pTeorico = parte(teorico.cmv, teorico.vendaComFicha);
   const pReal = realMes.variacao === null ? null : parte(realMes.cmv, teorico.venda);
   const cobertura = parte(teorico.vendaComFicha, teorico.venda);
+  // Preço de venda de tabela (0024): quanto daria pela tabela, comparado com o que o PDV registrou.
+  const comPreco = produtos.length > 0 && "preco_venda" in produtos[0];
+  const tabela = new Map(produtos.filter((p) => p.preco_venda).map((p) => [p.id, Number(p.preco_venda)]));
+  const pelaTabela = (l: (typeof linhas)[number]) => {
+    const preco = l.produto_id ? tabela.get(l.produto_id) : undefined;
+    return preco === undefined ? null : Math.round(l.quantidade * preco * 100);
+  };
+  const comparaveis = linhas.filter((l) => pelaTabela(l) !== null && l.venda !== null);
+  const totalTabela = comparaveis.reduce((a, l) => a + pelaTabela(l)!, 0);
+  const totalCobrado = comparaveis.reduce((a, l) => a + l.venda!, 0);
+  const comFichaETabela = comparaveis.filter((l) => l.cmv !== null);
+  const tabelaComFicha = comFichaETabela.reduce((a, l) => a + pelaTabela(l)!, 0);
+  const pTabela = parte(comFichaETabela.reduce((a, l) => a + l.cmv!, 0), tabelaComFicha);
 
   return (
     <div className="space-y-6">
@@ -110,7 +123,11 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
           <Numero
             rotulo="CMV teórico"
             valor={moeda(teorico.cmv)}
-            nota={pTeorico === null ? "sem fichas" : `${pct.format(pTeorico)} das vendas com ficha`}
+            nota={
+              pTeorico === null
+                ? "sem fichas"
+                : `${pct.format(pTeorico)} das vendas com ficha${pTabela === null ? "" : ` · ${pct.format(pTabela)} pelo preço de venda`}`
+            }
           />
           <Numero
             rotulo="CMV real"
@@ -143,6 +160,25 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
                   quando os custos estiverem certos para ele.
                 </>
               )}
+            </p>
+          )}
+          {comparaveis.length > 0 && totalTabela !== totalCobrado && (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">
+              Pelo preço de venda, {comparaveis.length === 1 ? "o produto com preço teria" : `os ${comparaveis.length} produtos com preço teriam`}{" "}
+              vendido {moeda(totalTabela)}; o PDV registrou {moeda(totalCobrado)}:{" "}
+              <strong>
+                {moeda(Math.abs(totalTabela - totalCobrado))} {totalCobrado < totalTabela ? "abaixo" : "acima"} da tabela
+              </strong>
+              . A coluna “Dif. da tabela” mostra em quais produtos.
+            </p>
+          )}
+          {comPreco && tabela.size === 0 && (
+            <p className="text-xs text-slate-500">
+              Informe o preço de venda de cada produto na{" "}
+              <Link href="?aba=fichas" className="font-medium underline">
+                aba Fichas técnicas
+              </Link>{" "}
+              para comparar o que o PDV cobrou com o cardápio.
             </p>
           )}
           {teorico.semFicha.produtos > 0 && (
@@ -190,6 +226,7 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
               <th className={`${t.th} text-right`}>Qtd.</th>
               <th className={`${t.th} hidden text-right sm:table-cell`}>Vendas</th>
               <th className={`${t.th} hidden text-right md:table-cell`}>Custo unit.</th>
+              {tabela.size > 0 && <th className={`${t.th} hidden text-right lg:table-cell`}>Dif. da tabela</th>}
               <th className={`${t.th} text-right`}>CMV teórico</th>
               <th className={`${t.th} text-right`}>% da venda</th>
             </tr>
@@ -219,6 +256,16 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
                   <td className="hidden whitespace-nowrap px-5 py-2 text-right tabular-nums md:table-cell">
                     {l.custoUnitario === null ? "—" : real.format(l.custoUnitario)}
                   </td>
+                  {tabela.size > 0 && (
+                    <td className="hidden whitespace-nowrap px-5 py-2 text-right tabular-nums lg:table-cell">
+                      {(() => {
+                        const t2 = pelaTabela(l);
+                        if (t2 === null || l.venda === null) return "—";
+                        const d = l.venda - t2;
+                        return Math.abs(d) < 1 ? "—" : <span className={d < 0 ? "text-amber-700" : undefined}>{(d > 0 ? "+" : "−") + moeda(Math.abs(d))}</span>;
+                      })()}
+                    </td>
+                  )}
                   <td className="whitespace-nowrap px-5 py-2 text-right tabular-nums">{l.cmv === null ? "—" : moeda(l.cmv)}</td>
                   <td className={cx("whitespace-nowrap px-5 py-2 text-right tabular-nums", p !== null && p > 1 && "text-red-700")}>
                     {p === null ? "—" : pct.format(p)}
@@ -251,7 +298,8 @@ function Explicacao() {
       está aberto e com o custo gravado no fechamento depois que o mês é fechado. CMV real:
       compras do mês (linha 5 da DRE, por competência) + estoque inicial − estoque final, pelas contagens fechadas. Real acima do
       teórico aponta perda, desperdício, porção maior que a ficha, consumo interno ou compra lançada no mês errado. Os percentuais
-      são sobre o total vendido no relatório do PDV.
+      são sobre o total vendido no relatório do PDV; “pelo preço de venda” refaz a conta com o preço do cardápio de cada produto
+      (só os que têm preço).
     </p>
   );
 }

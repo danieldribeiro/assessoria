@@ -222,7 +222,14 @@ export function variacoesEstoque(
 // Etapa 2 (migração 0019): fichas técnicas, vendas do PDV e CMV teórico
 // ---------------------------------------------------------------------------
 
-export type Produto = { id: string; empresa_id: string; nome: string; categoria: string | null; ativo: boolean };
+export type Produto = {
+  id: string;
+  empresa_id: string;
+  nome: string;
+  categoria: string | null;
+  ativo: boolean;
+  preco_venda?: number | null; // 0024: preço de tabela; undefined antes da migração
+};
 export type LinhaFicha = { id: string; produto_id: string; item_id: string; quantidade: number; ordem: number };
 export type VendaMes = {
   id: string;

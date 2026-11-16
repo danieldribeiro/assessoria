@@ -20,6 +20,7 @@ type Linha = { chave: number; item_id: string; quantidade: string; medida: strin
 
 const real = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const qtd = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 });
+const pct = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 });
 
 // Ficha técnica de um produto: quanto de cada insumo vai em uma unidade vendida.
 // A quantidade pode ser digitada em g ou ml; grava convertida para a unidade em que o insumo é contado.
@@ -27,15 +28,18 @@ export function EditorFicha({
   produto,
   ficha,
   insumos,
+  preco,
 }: {
   produto: { id: string; nome: string };
   ficha: { item_id: string; quantidade: number }[];
   insumos: InsumoFicha[];
+  preco?: number | null; // preço de venda de tabela (0024); undefined = campo ainda não existe no banco
 }) {
   const dialogo = useRef<HTMLDialogElement>(null);
   const proxima = useRef(0);
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [erro, setErro] = useState<string>();
+  const [precoTexto, setPrecoTexto] = useState("");
   const [ocupado, iniciar] = useTransition();
   const porId = new Map(insumos.map((i) => [i.id, i]));
   const opcoes = (id: string): OpcaoMedida[] => {
@@ -73,6 +77,7 @@ export function EditorFicha({
 
   function abrir() {
     setErro(undefined);
+    setPrecoTexto(preco === undefined || preco === null ? "" : paraCampoBR(preco));
     setLinhas(ficha.length ? ficha.map((l) => novaLinha(l.item_id, l.quantidade)) : [novaLinha()]);
     dialogo.current?.showModal();
   }
@@ -88,8 +93,17 @@ export function EditorFicha({
     trocar(l.chave, () => ({ medida, quantidade }));
   }
 
+  const precoLido = lerNumeroBR(precoTexto);
+  const margem = precoLido.estado === "valido" && precoLido.valor > 0 && custo.total > 0 ? (precoLido.valor - custo.total) / precoLido.valor : null;
+
   function salvar() {
     setErro(undefined);
+    let novoPreco: number | null | undefined;
+    if (preco !== undefined) {
+      if (precoLido.estado === "invalido") return setErro(mensagemNumeroInvalido("Preço de venda", precoLido.texto));
+      if (precoLido.estado === "valido" && precoLido.valor < 0) return setErro("O preço de venda não pode ser negativo.");
+      novoPreco = precoLido.estado === "valido" ? precoLido.valor : null;
+    }
     const itens: { item_id: string; quantidade: number }[] = [];
     for (const l of linhas) {
       if (!l.item_id && !l.quantidade.trim()) continue; // linha em branco
@@ -101,10 +115,10 @@ export function EditorFicha({
       itens.push({ item_id: l.item_id, quantidade: Number((q.valor * fatorDe(l)).toFixed(6)) });
     }
     iniciar(async () => {
-      const r = await salvarFicha(produto.id, itens);
+      const r = await salvarFicha(produto.id, itens, novoPreco);
       if (r && "erro" in r && typeof r.erro === "string") return setErro(r.erro);
       dialogo.current?.close();
-      avisar(itens.length ? "Ficha salva" : "Ficha apagada");
+      avisar(itens.length ? "Ficha salva" : ficha.length ? "Ficha apagada" : "Preço salvo");
     });
   }
 
@@ -135,6 +149,21 @@ export function EditorFicha({
               Quanto de cada insumo vai em <strong>uma unidade vendida</strong>. Escolha a medida (g, ml, pct…) e o Axis converte para a
               unidade em que o insumo é contado no estoque.
             </p>
+            {preco !== undefined && (
+              <label className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="text-sm font-medium text-slate-700">Preço de venda (cardápio)</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="text-sm text-slate-500">R$</span>
+                  <input
+                    value={precoTexto}
+                    onChange={(e) => setPrecoTexto(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    className={cx(classeInput, "w-28 text-right tabular-nums")}
+                  />
+                </span>
+              </label>
+            )}
             <ul className="space-y-3">
               {linhas.map((l) => {
                 const insumo = porId.get(l.item_id);
@@ -229,6 +258,12 @@ export function EditorFicha({
                   {" "}
                   (mais {custo.semCusto} {custo.semCusto === 1 ? "insumo" : "insumos"} ainda sem custo)
                 </span>
+              )}
+              {margem !== null && (
+                <>
+                  {" "}
+                  · Margem pelo preço de venda: <strong className={cx("tabular-nums", margem < 0 && "text-red-700")}>{pct.format(margem)}</strong>
+                </>
               )}
             </p>
             {erro && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
