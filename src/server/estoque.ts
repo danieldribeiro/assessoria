@@ -127,7 +127,7 @@ export async function salvarCustos(empresaId: string, dados: FormData) {
       const conteudo = c.estado === "valido" ? c.valor : null;
       if (conteudo !== null && conteudo <= 0) return { erro: `Conteúdo de ${item.nome}: precisa ser maior que zero.` };
       const medida = conteudo === null ? null : texto(dados, `medida_${item.id}`);
-      if (medida !== null && !MEDIDAS_CONTEUDO.includes(medida)) return { erro: `Conteúdo de ${item.nome}: escolha g, kg, ml ou L.` };
+      if (medida !== null && !MEDIDAS_CONTEUDO.includes(medida)) return { erro: `Conteúdo de ${item.nome}: escolha g, kg, ml, L, un ou pct.` };
       mudanca.conteudo = conteudo;
       mudanca.conteudo_medida = medida;
       if (conteudo !== item.conteudo || medida !== item.conteudo_medida) mudou = true;

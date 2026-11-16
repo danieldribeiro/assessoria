@@ -376,7 +376,9 @@ const MEDIDAS: Record<string, { tipo: "massa" | "volume"; base: number }> = {
   ml: { tipo: "volume", base: 1 },
   L: { tipo: "volume", base: 1000 },
 };
-export const MEDIDAS_CONTEUDO = Object.keys(MEDIDAS);
+// 0022: o conteúdo também pode ser em pacotes ou unidades (ex.: 1 cx = 12 pct de Fini; cada bebida leva 1 pct).
+const CONTAGENS = ["un", "pct"];
+export const MEDIDAS_CONTEUDO = [...Object.keys(MEDIDAS), ...CONTAGENS];
 
 // "Kg", "KG", "kilo" → "kg"; "l", "lt", "litro" → "L"; o resto (un, pct, cx...) não é medida.
 export function medidaPadronizada(unidade: string | null | undefined): string | null {
@@ -404,13 +406,17 @@ export function opcoesMedida(item: Pick<ItemEstoque, "unidade" | "conteudo" | "c
   if (cm && item.conteudo && item.conteudo > 0) {
     const total = item.conteudo * cm.base; // 1 unidade contada, em g ou ml
     for (const [medida, m] of Object.entries(MEDIDAS)) if (m.tipo === cm.tipo) opcoes.push({ medida, fator: m.base / total });
+  } else if (item.conteudo_medida && CONTAGENS.includes(item.conteudo_medida) && item.conteudo && item.conteudo > 0) {
+    // 1 cx = 12 pct → 1 pct vale 1/12 da caixa. Mesma unidade dos dois lados (1 un = 5 un) não faz sentido e fica de fora.
+    if (item.conteudo_medida.toLowerCase() !== String(item.unidade).trim().toLowerCase())
+      opcoes.push({ medida: item.conteudo_medida, fator: 1 / item.conteudo });
   }
   return opcoes;
 }
 
-// Medida mais natural para digitar uma porção: g ou ml quando há; senão a própria unidade contada.
+// Medida mais natural para digitar uma porção: g ou ml quando há; senão a parte (pct, un) quando há; senão a própria unidade contada.
 export function medidaInicial(opcoes: OpcaoMedida[]) {
-  return opcoes.find((o) => o.medida === "g" || o.medida === "ml") ?? opcoes[0];
+  return opcoes.find((o) => o.medida === "g" || o.medida === "ml") ?? opcoes[1] ?? opcoes[0];
 }
 
 // Valor na medida escolhida, sem a sujeira do ponto flutuante (0,02 kg → 20 g, não 20,000000000000004).

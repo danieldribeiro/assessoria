@@ -132,7 +132,7 @@ export function EditorFicha({
           </div>
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
             <p className="text-sm text-slate-600">
-              Quanto de cada insumo vai em <strong>uma unidade vendida</strong>. Escolha a medida (g, ml…) e o Axis converte para a
+              Quanto de cada insumo vai em <strong>uma unidade vendida</strong>. Escolha a medida (g, ml, pct…) e o Axis converte para a
               unidade em que o insumo é contado no estoque.
             </p>
             <ul className="space-y-3">
@@ -205,7 +205,7 @@ export function EditorFicha({
                               · 1 {insumo.unidade} = {qtd.format(insumo.conteudo)} {insumo.conteudo_medida}
                             </>
                           )}
-                          {ops.length < 2 && " · para usar g ou ml, informe o conteúdo de 1 unidade na aba Insumos"}
+                          {ops.length < 2 && " · para usar g, ml ou pacote, informe o conteúdo de 1 unidade na aba Insumos"}
                         </span>
                         {typeof v === "number" && <span className="font-medium tabular-nums text-slate-700">{real.format(v)}</span>}
                       </p>

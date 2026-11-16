@@ -231,6 +231,14 @@ describe("medidas da ficha técnica", () => {
     expect(medidaInicial(leite).medida).toBe("ml");
     expect(270 * medidaInicial(leite).fator).toBeCloseTo(0.27);
   });
+  it("insumo em caixa usa pacote quando o conteúdo é em pct", () => {
+    const fini = opcoesMedida({ unidade: "cx", conteudo: 12, conteudo_medida: "pct" });
+    expect(fini.map((o) => o.medida)).toEqual(["cx", "pct"]);
+    expect(medidaInicial(fini).medida).toBe("pct");
+    expect(1 * medidaInicial(fini).fator * 60).toBeCloseTo(5); // 1 pct de uma caixa de 12 a R$ 60,00 = R$ 5,00
+    expect(naMedida(1 / 12, medidaInicial(fini).fator)).toBe(1); // grava 1/12 cx e volta a mostrar 1 pct
+    expect(opcoesMedida({ unidade: "UN", conteudo: 5, conteudo_medida: "un" })).toEqual([{ medida: "UN", fator: 1 }]);
+  });
   it("reconhece litros escritos de vários jeitos", () => {
     expect(medidaPadronizada("lt")).toBe("L");
     expect(medidaPadronizada("Litros")).toBe("L");
