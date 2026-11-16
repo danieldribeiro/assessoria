@@ -234,8 +234,10 @@ export async function importarFichas(empresaId: string, fichas: FichaImportada[]
   return { resultado: data as { fichas: number; produtos_novos: number; insumos_novos: number } };
 }
 
-export async function salvarFicha(produtoId: string, itens: { item_id: string; quantidade: number }[]) {
+// preco: preço de venda de tabela (0024); undefined = não mexe (antes da migração o campo nem aparece), null = apaga.
+export async function salvarFicha(produtoId: string, itens: { item_id: string; quantidade: number }[], preco?: number | null) {
   if (!Array.isArray(itens) || itens.length > 100) return { erro: "Ficha inválida." };
+  if (preco !== undefined && preco !== null && !(Number.isFinite(preco) && preco >= 0 && preco < 1e9)) return { erro: "Preço de venda inválido." };
   const vistos = new Set<string>();
   for (const i of itens) {
     if (typeof i?.item_id !== "string" || !/^[0-9a-f-]{36}$/i.test(i.item_id)) return { erro: "Escolha o insumo de cada linha." };
@@ -249,6 +251,10 @@ export async function salvarFicha(produtoId: string, itens: { item_id: string; q
     p_itens: itens.map((i) => ({ item_id: i.item_id, quantidade: Math.round(i.quantidade * 1e6) / 1e6 })),
   });
   if (error) return falhaEstoque(error);
+  if (preco !== undefined) {
+    const r = await supabase.from("fin_estoque_produtos").update({ preco_venda: preco === null ? null : Math.round(preco * 100) / 100 }).eq("id", produtoId);
+    if (r.error) return falhaEstoque(r.error);
+  }
   atualizarTelas();
 }
 

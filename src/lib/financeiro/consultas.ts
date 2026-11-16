@@ -364,6 +364,7 @@ export async function carregarProdutos(empresaId: string) {
   if (error) throw new Error(error.message);
   return (data ?? []).map(({ ficha, ...p }) => ({
     ...(p as Produto),
+    ...("preco_venda" in p ? { preco_venda: numeroOuNulo(p.preco_venda) } : {}),
     ficha: ((ficha ?? []) as LinhaFicha[]).map((l) => ({ ...l, quantidade: Number(l.quantidade) })).sort((a, b) => a.ordem - b.ordem),
   }));
 }
