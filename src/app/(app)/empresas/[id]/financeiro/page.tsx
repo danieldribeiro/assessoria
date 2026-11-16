@@ -1,13 +1,15 @@
-import { ArrowLeftRight, Boxes, CalendarClock, ClipboardList, ChevronRight, CreditCard, FileText, Landmark, LayoutDashboard, ListTree, ReceiptText, Scale, Store, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, Boxes, CalendarClock, ChartPie, ClipboardList, ChevronRight, CookingPot, CreditCard, FileText, Landmark, LayoutDashboard, ListTree, ReceiptText, Scale, Store, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { classeBotao, cx } from "@/components/ui";
 import { hoje } from "@/lib/datas";
 import { carregarBaseFinanceira } from "@/lib/financeiro/consultas";
 import { AbaAPagar } from "./apagar";
 import { AbaCartoes } from "./cartoes";
+import { AbaCmv } from "./cmv";
 import { AbaContasCaixa } from "./contas-caixa";
 import { AbaContagens, AbaInsumos } from "./estoque";
 import { AbaExtratos } from "./extratos";
+import { AbaFichas } from "./fichas";
 import { AbaFluxo } from "./fluxo";
 import { AbaFornecedores } from "./fornecedores";
 import { ORDENS, type Ordem } from "@/lib/financeiro/painel";
@@ -18,7 +20,7 @@ import { AbaPainel, lerFiltros } from "./painel";
 import { AbaPlanoContas } from "./plano-contas";
 import { AbaResultado } from "./resultado";
 
-type Aba = { aba: string; nome: string; icone: LucideIcon; recurso?: "fornecedores" | "extratos" | "cartoes" | "estoque" };
+type Aba = { aba: string; nome: string; icone: LucideIcon; recurso?: "fornecedores" | "extratos" | "cartoes" | "estoque" | "fichas" };
 
 // Abas em grupos: no computador viram um menu lateral; no celular, uma faixa que rola para o lado.
 const GRUPOS: { nome: string; abas: Aba[] }[] = [
@@ -40,9 +42,11 @@ const GRUPOS: { nome: string; abas: Aba[] }[] = [
     ],
   },
   {
-    // Só para empresas com o controle de estoque ligado (0018).
+    // Só para empresas com o controle de estoque ligado (0018); fichas e CMV do mês depois da 0019.
     nome: "Estoque",
     abas: [
+      { aba: "cmv", nome: "CMV do mês", icone: ChartPie, recurso: "fichas" },
+      { aba: "fichas", nome: "Fichas técnicas", icone: CookingPot, recurso: "fichas" },
       { aba: "contagens", nome: "Contagens", icone: ClipboardList, recurso: "estoque" },
       { aba: "insumos", nome: "Insumos", icone: Boxes, recurso: "estoque" },
     ],
@@ -74,7 +78,7 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
   const dados = await carregarBaseFinanceira(id);
   const { empresa } = dados;
   // Abas das migrations 0009, 0010 e 0011 só aparecem depois de aplicadas; as de estoque, só com a opção ligada.
-  const disponivel = { ...dados.recursos, estoque: dados.estoqueAtivo };
+  const disponivel = { ...dados.recursos, estoque: dados.estoqueAtivo, fichas: dados.estoqueAtivo && dados.recursos.fichas };
   const grupos = GRUPOS.map((g) => ({ ...g, abas: g.abas.filter((a) => !a.recurso || disponivel[a.recurso]) })).filter((g) => g.abas.length);
   const abas = grupos.flatMap((g) => g.abas);
   const aba = abas.some((a) => a.aba === valor("aba")) ? valor("aba")! : "painel";
@@ -170,6 +174,8 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
           {aba === "fornecedores" && <AbaFornecedores empresa={empresa} contrapartes={dados.contrapartes} periodo={periodo} />}
           {aba === "contagens" && <AbaContagens empresa={empresa} contagemId={valor("contagem") ?? null} />}
           {aba === "insumos" && <AbaInsumos empresa={empresa} />}
+          {aba === "fichas" && <AbaFichas empresa={empresa} />}
+          {aba === "cmv" && <AbaCmv empresa={empresa} contas={dados.contas} mes={valor("mes")} />}
           {aba === "plano" && <AbaPlanoContas {...dados} />}
           {aba === "caixas" && <AbaContasCaixa {...dados} />}
         </div>

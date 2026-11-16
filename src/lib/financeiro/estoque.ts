@@ -215,3 +215,151 @@ export function variacoesEstoque(
     return { mes, centavos: final - inicial, inicial, final };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Etapa 2 (migração 0019): fichas técnicas, vendas do PDV e CMV teórico
+// ---------------------------------------------------------------------------
+
+export type Produto = { id: string; empresa_id: string; nome: string; categoria: string | null; ativo: boolean };
+export type LinhaFicha = { id: string; produto_id: string; item_id: string; quantidade: number; ordem: number };
+export type VendaMes = { id: string; empresa_id: string; mes: string; arquivo_nome: string | null; criado_em: string };
+export type LinhaVenda = {
+  id: string;
+  venda_id: string;
+  produto_id: string | null;
+  nome_origem: string;
+  categoria_origem: string | null;
+  quantidade: number;
+  valor: number | null;
+  ordem: number;
+};
+export type VendaImportada = { nome: string; categoria: string | null; quantidade: number; valor: number | null };
+export type FichaImportada = { produto: string; categoria: string | null; itens: { insumo: string; unidade: string; quantidade: number }[] };
+
+// Relatório de vendas por produto (PDV): colunas Produto e Quantidade; Categoria e Total de venda, se houver.
+// Linha sem nome (o total do relatório, por exemplo) fica de fora; o mesmo produto em duas linhas é somado.
+export function lerVendas(linhas: Celula[][]): { itens: VendaImportada[]; erros: string[] } | { erro: string } {
+  const cab = acharCabecalho(linhas, [
+    (t) => /^(produto|item|descricao)\b/.test(t),
+    (t) => /^(quant|qtd|qtde)\b/.test(t) || t === "quantidade vendida",
+  ]);
+  if (!cab) return { erro: "Não encontrei as colunas “Produto” e “Quantidade” no relatório." };
+  const [cNome, cQtd] = cab.colunas;
+  const cCategoria = cab.nomes.findIndex((t) => t === "categoria" || t === "grupo");
+  const cValor = cab.nomes.findIndex((t) => /^(total venda|total vendido|valor total|total|valor|venda total)$/.test(t));
+  const porNome = new Map<string, VendaImportada>();
+  const erros: string[] = [];
+  for (const [i, l] of linhas.slice(cab.linha + 1).entries()) {
+    const nome = String(l?.[cNome] ?? "").trim();
+    if (!nome) continue;
+    const n = cab.linha + i + 2;
+    const quantidade = numeroCelula(l?.[cQtd] ?? null);
+    if (quantidade === null || quantidade < 0) {
+      erros.push(`Linha ${n} (${nome}): quantidade vazia ou inválida.`);
+      continue;
+    }
+    if (quantidade === 0) continue;
+    const valor = cValor >= 0 ? numeroCelula(l?.[cValor] ?? null) : null;
+    const chave = normalizar(nome);
+    const atual = porNome.get(chave);
+    if (atual) {
+      atual.quantidade += quantidade;
+      atual.valor = atual.valor === null && valor === null ? null : (atual.valor ?? 0) + (valor ?? 0);
+    } else {
+      porNome.set(chave, { nome, categoria: cCategoria >= 0 ? String(l?.[cCategoria] ?? "").trim() || null : null, quantidade, valor });
+    }
+  }
+  return { itens: [...porNome.values()], erros };
+}
+
+// Fichas em planilha "plana": uma linha por ingrediente, com Produto, Insumo e Quantidade (na unidade do insumo).
+// Unidade e Categoria são opcionais. As linhas do mesmo produto formam a ficha dele.
+export function lerFichas(linhas: Celula[][]): { fichas: FichaImportada[]; erros: string[] } | { erro: string } {
+  const cab = acharCabecalho(linhas, [(t) => t === "produto", (t) => /^(insumo|ingrediente)\b/.test(t), (t) => /^(quantidade|qtd|qtde)\b/.test(t)]);
+  if (!cab) return { erro: "Não encontrei as colunas “Produto”, “Insumo” e “Quantidade” na planilha." };
+  const [cProduto, cInsumo, cQtd] = cab.colunas;
+  const cUnidade = cab.nomes.findIndex((t) => t === "unidade" || t === "un");
+  const cCategoria = cab.nomes.findIndex((t) => t === "categoria");
+  const porProduto = new Map<string, FichaImportada>();
+  const erros: string[] = [];
+  for (const [i, l] of linhas.slice(cab.linha + 1).entries()) {
+    const produto = String(l?.[cProduto] ?? "").trim();
+    const insumo = String(l?.[cInsumo] ?? "").trim();
+    if (!produto && !insumo) continue;
+    const n = cab.linha + i + 2;
+    const quantidade = numeroCelula(l?.[cQtd] ?? null);
+    if (!produto || !insumo) {
+      erros.push(`Linha ${n}: falta o ${produto ? "insumo" : "produto"}.`);
+      continue;
+    }
+    if (quantidade === null || quantidade <= 0) {
+      erros.push(`Linha ${n} (${produto} · ${insumo}): quantidade vazia ou inválida.`);
+      continue;
+    }
+    const chave = normalizar(produto);
+    const ficha = porProduto.get(chave) ?? { produto, categoria: cCategoria >= 0 ? String(l?.[cCategoria] ?? "").trim() || null : null, itens: [] };
+    ficha.itens.push({ insumo, unidade: (cUnidade >= 0 ? String(l?.[cUnidade] ?? "").trim() : "") || "un", quantidade });
+    porProduto.set(chave, ficha);
+  }
+  return { fichas: [...porProduto.values()], erros };
+}
+
+// Custo de uma unidade do produto pela ficha, com os custos atuais dos insumos (em reais).
+// Insumo sem custo conta como zero e é avisado em semCusto.
+export function custoFicha(ficha: { item_id: string; quantidade: number }[], itens: Map<string, Pick<ItemEstoque, "custo_unitario">>) {
+  let custo = 0;
+  let semCusto = 0;
+  for (const l of ficha) {
+    const c = itens.get(l.item_id)?.custo_unitario;
+    if (c === null || c === undefined) semCusto++;
+    else custo += Number(l.quantidade) * Number(c);
+  }
+  return { custo, semCusto };
+}
+
+export type LinhaCmv = {
+  produto_id: string | null;
+  nome: string;
+  categoria: string | null;
+  quantidade: number;
+  venda: number | null; // centavos
+  custoUnitario: number | null; // reais; null = sem ficha
+  cmv: number | null; // centavos
+  semCusto: number; // insumos da ficha ainda sem custo
+};
+
+// CMV teórico do mês: em cada produto vendido, quantidade × custo da ficha. Produto sem ficha fica de fora do total
+// e aparece em semFicha, com a venda dele, para mostrar quanto da venda está coberto.
+export function cmvTeorico(
+  vendas: Pick<LinhaVenda, "produto_id" | "nome_origem" | "categoria_origem" | "quantidade" | "valor">[],
+  fichas: Map<string, { item_id: string; quantidade: number }[]>,
+  itens: Map<string, Pick<ItemEstoque, "custo_unitario">>,
+) {
+  const linhas: LinhaCmv[] = vendas.map((v) => {
+    const ficha = v.produto_id ? fichas.get(v.produto_id) : undefined;
+    const venda = v.valor === null ? null : Math.round(Number(v.valor) * 100);
+    if (!ficha?.length) return { produto_id: v.produto_id, nome: v.nome_origem, categoria: v.categoria_origem, quantidade: Number(v.quantidade), venda, custoUnitario: null, cmv: null, semCusto: 0 };
+    const { custo, semCusto } = custoFicha(ficha, itens);
+    return {
+      produto_id: v.produto_id,
+      nome: v.nome_origem,
+      categoria: v.categoria_origem,
+      quantidade: Number(v.quantidade),
+      venda,
+      custoUnitario: custo,
+      cmv: Math.round(Number(v.quantidade) * custo * 100),
+      semCusto,
+    };
+  });
+  const soma = (f: (l: LinhaCmv) => number | null, filtro: (l: LinhaCmv) => boolean = () => true) =>
+    linhas.filter(filtro).reduce((a, l) => a + (f(l) ?? 0), 0);
+  const comFicha = (l: LinhaCmv) => l.cmv !== null;
+  return {
+    linhas,
+    venda: soma((l) => l.venda),
+    vendaComFicha: soma((l) => l.venda, comFicha),
+    cmv: soma((l) => l.cmv, comFicha),
+    semFicha: { produtos: linhas.filter((l) => !comFicha(l)).length, venda: soma((l) => l.venda, (l) => !comFicha(l)) },
+    comInsumoSemCusto: linhas.filter((l) => l.semCusto > 0).length,
+  };
+}

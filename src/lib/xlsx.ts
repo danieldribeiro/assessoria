@@ -1,6 +1,8 @@
 // Leitor mínimo de planilhas .xlsx (o formato do Excel desde 2007), sem biblioteca: o arquivo é um zip com XML dentro.
 // Lê só a primeira aba, como texto e números, o que basta para importar contagens de estoque e listas de custos.
-// Roda no navegador e no Node (usa DecompressionStream). Não lê o .xls antigo.
+// Roda no navegador e no Node (usa DecompressionStream). O .xls antigo (Excel 97–2003) é lido por src/lib/xls.ts.
+
+import { ehXls, lerXls } from "@/lib/xls";
 
 export type Celula = string | number | null;
 
@@ -71,6 +73,7 @@ function coluna(ref: string) {
 
 // Primeira aba da planilha como linhas de células (vazias = null).
 export async function lerPlanilha(bytes: Uint8Array): Promise<Celula[][]> {
+  if (ehXls(bytes)) return lerXls(bytes);
   const arquivos = await lerZip(bytes, (n) => /^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|worksheets\/sheet\d+\.xml)$/.test(n));
   const livro = arquivos.get("xl/workbook.xml");
   if (!livro) throw new Error("O arquivo não é uma planilha .xlsx.");

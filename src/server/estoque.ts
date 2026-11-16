@@ -2,7 +2,7 @@
 
 // Estoque e CMV (migração 0018). As planilhas são lidas no navegador (src/lib/xlsx.ts e src/lib/financeiro/estoque.ts);
 // aqui chegam só os itens, conferidos de novo antes de gravar.
-import { chaveNome, type ItemImportado } from "@/lib/financeiro/estoque";
+import { chaveNome, type FichaImportada, type ItemImportado, type VendaImportada } from "@/lib/financeiro/estoque";
 import { lerNumeroBR } from "@/lib/numeros";
 import { criarCliente } from "@/lib/supabase/server";
 import { atualizarTelas, exigir, marcado, texto } from "@/server/util";
@@ -13,6 +13,9 @@ const MAX_ITENS = 2000;
 const MENSAGENS: Record<string, string> = {
   fin_estoque_contagens_data_unica: "Já existe uma contagem nesta data. Para trocar, apague a que está em rascunho e importe de novo.",
   fin_estoque_itens_nome_unico: "Já existe um insumo com esse nome.",
+  fin_estoque_produtos_nome_unico: "Já existe um produto com esse nome.",
+  fin_estoque_ficha_itens_insumo_unico: "O mesmo insumo aparece duas vezes na ficha. Junte as quantidades numa linha só.",
+  fin_estoque_ficha_itens_item: "Esse insumo é usado em alguma ficha técnica e não pode sair.",
 };
 
 function falhaEstoque(error: { message: string } | null) {
@@ -139,4 +142,82 @@ export async function importarCustos(empresaId: string, custos: { nome: string; 
   if (erro) return falhaEstoque(erro);
   atualizarTelas();
   return { atualizados: mudancas.length, iguais: usados.size - mudancas.length, semInsumo: custos.filter((c) => !usados.has(chaveNome(c.nome))).map((c) => c.nome) };
+}
+
+// ---------------------------------------------------------------------------
+// Etapa 2 (0019): fichas técnicas e vendas do PDV
+// ---------------------------------------------------------------------------
+
+const numeroValido = (v: unknown, minimo: number) => typeof v === "number" && Number.isFinite(v) && v >= minimo;
+
+export async function importarVendas(empresaId: string, d: { mes: string; arquivo: string; itens: VendaImportada[] }) {
+  if (!/^\d{4}-\d{2}$/.test(d.mes ?? "")) return { erro: "Escolha o mês das vendas." };
+  if (!Array.isArray(d.itens) || d.itens.length === 0) return { erro: "O relatório não tem vendas." };
+  if (d.itens.length > MAX_ITENS) return { erro: "Produtos demais no relatório." };
+  const itens = [];
+  for (const i of d.itens) {
+    const nome = curto(i?.nome, 200);
+    if (!nome || !numeroValido(i?.quantidade, 0) || (i.valor !== null && !numeroValido(i?.valor, -1e9)))
+      return { erro: "Alguma linha veio em formato inválido. Selecione o arquivo de novo." };
+    itens.push({ nome, categoria: curto(i.categoria, 100), quantidade: Math.round(i.quantidade * 1000) / 1000, valor: i.valor === null ? null : Math.round(i.valor * 100) / 100 });
+  }
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_estoque_importar_vendas", { p_empresa: empresaId, p_mes: `${d.mes}-01`, p_arquivo: curto(d.arquivo, 200), p_itens: itens });
+  if (error) return falhaEstoque(error)!;
+  atualizarTelas();
+  return { mes: d.mes };
+}
+
+export async function apagarVendas(id: string) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.from("fin_estoque_vendas").delete().eq("id", id);
+  if (error) return falhaEstoque(error);
+  atualizarTelas();
+}
+
+export async function importarFichas(empresaId: string, fichas: FichaImportada[]) {
+  if (!Array.isArray(fichas) || fichas.length === 0) return { erro: "A planilha não tem fichas." };
+  if (fichas.length > MAX_ITENS) return { erro: "Fichas demais na planilha." };
+  const limpas = [];
+  for (const f of fichas) {
+    const produto = curto(f?.produto, 200);
+    if (!produto || !Array.isArray(f.itens) || f.itens.length > 100) return { erro: "Alguma ficha veio em formato inválido. Selecione o arquivo de novo." };
+    const itens = [];
+    for (const i of f.itens) {
+      const insumo = curto(i?.insumo, 200);
+      if (!insumo || !numeroValido(i?.quantidade, 1e-9)) return { erro: `Ficha de ${produto}: algum insumo veio sem nome ou sem quantidade.` };
+      itens.push({ insumo, unidade: curto(i.unidade, 20) ?? "un", quantidade: Math.round(i.quantidade * 1e6) / 1e6 });
+    }
+    limpas.push({ produto, categoria: curto(f.categoria, 100), itens });
+  }
+  const supabase = await criarCliente();
+  const { data, error } = await supabase.rpc("fin_estoque_importar_fichas", { p_empresa: empresaId, p_fichas: limpas });
+  if (error) return falhaEstoque(error)!;
+  atualizarTelas();
+  return { resultado: data as { fichas: number; produtos_novos: number; insumos_novos: number } };
+}
+
+export async function salvarFicha(produtoId: string, itens: { item_id: string; quantidade: number }[]) {
+  if (!Array.isArray(itens) || itens.length > 100) return { erro: "Ficha inválida." };
+  const vistos = new Set<string>();
+  for (const i of itens) {
+    if (typeof i?.item_id !== "string" || !/^[0-9a-f-]{36}$/i.test(i.item_id)) return { erro: "Escolha o insumo de cada linha." };
+    if (!numeroValido(i.quantidade, 1e-9)) return { erro: "Informe a quantidade de cada insumo (maior que zero)." };
+    if (vistos.has(i.item_id)) return { erro: "O mesmo insumo aparece duas vezes na ficha. Junte as quantidades numa linha só." };
+    vistos.add(i.item_id);
+  }
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_estoque_salvar_ficha", {
+    p_produto: produtoId,
+    p_itens: itens.map((i) => ({ item_id: i.item_id, quantidade: Math.round(i.quantidade * 1e6) / 1e6 })),
+  });
+  if (error) return falhaEstoque(error);
+  atualizarTelas();
+}
+
+export async function mudarAtivacaoProduto(id: string, ativo: boolean) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.from("fin_estoque_produtos").update({ ativo }).eq("id", id);
+  exigir(error);
+  atualizarTelas();
 }

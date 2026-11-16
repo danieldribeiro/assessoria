@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { lerContagem, lerCustos, numeroCelula, resumoContagem, valorLinha, variacoesEstoque } from "@/lib/financeiro/estoque";
+import { cmvTeorico, custoFicha, lerContagem, lerCustos, lerFichas, lerVendas, numeroCelula, resumoContagem, valorLinha, variacoesEstoque } from "@/lib/financeiro/estoque";
 import { ID_VARIACAO_ESTOQUE, montarDre, type Parcela } from "@/lib/financeiro/painel";
 import type { ContaPlano, Lancamento } from "@/lib/financeiro/dominio";
 import { lerPlanilha } from "@/lib/xlsx";
@@ -129,5 +129,86 @@ describe("DRE com variação de estoque", () => {
     const sem = montarDre(lista, ["2026-10-01", "2026-11-01"]);
     expect(montarDre(lista, ["2026-10-01", "2026-11-01"], [], [null, null])).toEqual(sem);
     expect(sem.linhas[4].contas.map((c) => c.id)).toEqual(["insumos"]);
+  });
+});
+
+describe("leitor de .xls antigo (Excel 97–2003)", () => {
+  it("lê o relatório do PDV: textos, números e acentos", async () => {
+    const linhas = await planilha("vendas-ficticias.xls");
+    expect(linhas[0][1]).toBe("Produto");
+    expect(linhas[1]).toEqual(["14", "ÁGUA COM GÁS 500ML", "BEBIDAS GELADAS", "52", "UN", 0, 6, 0, 312, 312, 100, -12.5]);
+    expect(linhas[3][1]).toBe("COOKIE & CIA <P>");
+  });
+
+  it("lê textos que atravessam a quebra da tabela de textos (CONTINUE), em 1 e 2 bytes", async () => {
+    const linhas = await planilha("muitos-textos.xls");
+    expect(linhas).toHaveLength(801);
+    expect(linhas[1]).toEqual(["Produto 0000 café €uro ", 0]);
+    expect(linhas[800]).toEqual([`Produto 0799 café ${"x".repeat(799 % 40)}`, 799]);
+    const esperado = (i: number) => `Produto ${String(i).padStart(4, "0")} café${i % 7 === 0 ? " €uro" : ""} ${"x".repeat(i % 40)}`;
+    expect(linhas.slice(1).every((l, i) => l[0] === esperado(i) && l[1] === i)).toBe(true);
+  });
+});
+
+describe("vendas do PDV", () => {
+  it("soma o mesmo produto, ignora o total e as quantidades zero", async () => {
+    const r = lerVendas(await planilha("vendas-ficticias.xls"));
+    if ("erro" in r) throw new Error(r.erro);
+    expect(r.itens).toEqual([
+      { nome: "ÁGUA COM GÁS 500ML", categoria: "BEBIDAS GELADAS", quantidade: 52, valor: 312 },
+      { nome: "LATTE P", categoria: "BEBIDAS QUENTES", quantidade: 100, valor: 1050 },
+      { nome: "COOKIE & CIA <P>", categoria: "DOCES", quantidade: 7, valor: 126 },
+    ]);
+    expect(r.erros).toEqual([]);
+  });
+
+  it("explica quando as colunas não existem", () => {
+    expect(lerVendas([["Nome", "Valor"]])).toEqual({ erro: expect.stringMatching(/Quantidade/) });
+  });
+});
+
+describe("fichas técnicas", () => {
+  it("agrupa por produto (sem diferença de maiúsculas) e avisa linhas incompletas", async () => {
+    const r = lerFichas(await planilha("fichas-ficticias.xlsx"));
+    if ("erro" in r) throw new Error(r.erro);
+    expect(r.fichas).toEqual([
+      {
+        produto: "LATTE P",
+        categoria: "BEBIDAS QUENTES",
+        itens: [
+          { insumo: "Leite integral", unidade: "un", quantidade: 0.2 },
+          { insumo: "Café em grão", unidade: "kg", quantidade: 0.018 },
+          { insumo: "Copo P", unidade: "un", quantidade: 1 },
+        ],
+      },
+      { produto: "COOKIE & CIA <P>", categoria: "DOCES", itens: [{ insumo: "Cookie", unidade: "un", quantidade: 1 }] },
+    ]);
+    expect(r.erros).toEqual([expect.stringMatching(/Linha 6 .*Embalagem.*quantidade/), expect.stringMatching(/Linha 7: falta o produto/)]);
+  });
+
+  it("custo da ficha e CMV teórico: produto sem ficha fica de fora e é mostrado à parte", () => {
+    const itens = new Map([
+      ["leite", { custo_unitario: 3.69 }],
+      ["cafe", { custo_unitario: 99 }],
+      ["copo", { custo_unitario: null }],
+    ]);
+    expect(custoFicha([{ item_id: "leite", quantidade: 0.2 }, { item_id: "cafe", quantidade: 0.018 }, { item_id: "copo", quantidade: 1 }], itens)).toEqual({
+      custo: 0.2 * 3.69 + 0.018 * 99,
+      semCusto: 1,
+    });
+    const fichas = new Map([["latte", [{ item_id: "leite", quantidade: 0.2 }, { item_id: "cafe", quantidade: 0.018 }]]]);
+    const r = cmvTeorico(
+      [
+        { produto_id: "latte", nome_origem: "LATTE P", categoria_origem: null, quantidade: 100, valor: 1050 },
+        { produto_id: "agua", nome_origem: "ÁGUA", categoria_origem: null, quantidade: 52, valor: 312 },
+      ],
+      fichas,
+      itens,
+    );
+    expect(r.cmv).toBe(Math.round(100 * (0.2 * 3.69 + 0.018 * 99) * 100)); // 25.200 centavos
+    expect(r.venda).toBe(136200);
+    expect(r.vendaComFicha).toBe(105000);
+    expect(r.semFicha).toEqual({ produtos: 1, venda: 31200 });
+    expect(r.linhas[1]).toMatchObject({ custoUnitario: null, cmv: null });
   });
 });
