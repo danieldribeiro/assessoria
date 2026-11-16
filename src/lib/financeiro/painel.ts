@@ -31,6 +31,7 @@ export type Parcela = {
 
 // As seções que formam o resultado operacional (linha 9 da DRE v4).
 export const SECAO_FATURAMENTO = 1;
+export const SECAO_CMV = 5;
 export const SECOES_DESPESA = [2, 3, 5, 6, 8] as const;
 
 export const centavos = (v: number) => Math.round(Number(v) * 100);
@@ -142,8 +143,13 @@ function agrupar(contas: LinhaContaDre[], porId: Map<string, ContaPlano>, plano:
   return itens.sort((a, b) => compararCodigo(a.codigo, b.codigo));
 }
 
+// Linha sem conta do plano, calculada pelas contagens de estoque (0018), dentro da linha 5.
+export const ID_VARIACAO_ESTOQUE = "variacao-estoque";
+
 // `plano` (todas as contas da empresa, inclusive grupos) permite mostrar os subgrupos; sem ele, `itens` é a lista plana.
-export function montarDre(lista: Parcela[], meses: string[], plano: ContaPlano[] = []): Dre {
+// `estoque`: variação de estoque de cada mês, em centavos com o sinal da DRE (estoque final − inicial), ou null no mês
+// sem as duas contagens. Entra na linha 5, que passa a ser o CMV (compras + estoque inicial − estoque final).
+export function montarDre(lista: Parcela[], meses: string[], plano: ContaPlano[] = [], estoque?: (number | null)[]): Dre {
   const mapaPlano = new Map(plano.map((c) => [c.id, c]));
   const indice = new Map(meses.map((m, i) => [m, i]));
   const vazio = () => meses.map(() => 0);
@@ -164,6 +170,13 @@ export function montarDre(lista: Parcela[], meses: string[], plano: ContaPlano[]
     const c = porConta.get(p.conta.id) ?? { conta: p.conta, valores: vazio() };
     c.valores[i] += p.centavos;
     porConta.set(p.conta.id, c);
+  }
+
+  const variacao = estoque && estoque.some((v) => v !== null) ? meses.map((_, i) => estoque[i] ?? 0) : null;
+  if (variacao) {
+    const v = porSecao.get(SECAO_CMV) ?? vazio();
+    variacao.forEach((x, i) => (v[i] += x));
+    porSecao.set(SECAO_CMV, v);
   }
 
   const valores = new Map<number, number[]>();
@@ -189,6 +202,11 @@ export function montarDre(lista: Parcela[], meses: string[], plano: ContaPlano[]
       }));
     const porId = new Map([...porConta.values()].map((c) => [c.conta.id, c.conta]));
     const itens = agrupar(contas, porId, mapaPlano);
+    if (variacao && s.numero === SECAO_CMV) {
+      const linha = { id: ID_VARIACAO_ESTOQUE, codigo: "", nome: "Variação de estoque", valores: variacao.map(reais), total: reais(somar(variacao)) };
+      contas.push(linha);
+      itens.push({ tipo: "conta", ...linha });
+    }
     return { numero: s.numero, nome: s.nome, calculada: !s.recebe, valores: v.map(reais), total: reais(somar(v)), contas, itens };
   });
   return { meses, linhas, foraDaDre: reais(fora) };

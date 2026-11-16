@@ -1,6 +1,7 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import type { Cartao, ContaCaixa, ContaPlano, Contraparte, Extrato, Fatura, Lancamento, Movimento, Saldo, Transferencia } from "@/lib/financeiro/dominio";
+import { diaAnterior, resumoContagem, variacoesEstoque, type Contagem, type ItemEstoque, type LinhaContagem } from "@/lib/financeiro/estoque";
 import type { MovimentoConta } from "@/lib/financeiro/fluxo";
 import { criarCliente } from "@/lib/supabase/server";
 
@@ -33,6 +34,7 @@ export async function carregarBaseFinanceira(empresaId: string, origem: "equipe"
     { data: contrapartes, error: e3 },
     { error: e4 },
     { data: cartoes, error: e5 },
+    { error: e6 },
   ] = await Promise.all([
       carregarEmpresa(supabase, empresaId, origem),
       supabase.from("fin_contas").select("*").eq("empresa_id", empresaId),
@@ -40,22 +42,27 @@ export async function carregarBaseFinanceira(empresaId: string, origem: "equipe"
       supabase.from("fin_contrapartes").select("id, empresa_id, nome, tipo, documento, ativa").eq("empresa_id", empresaId).order("nome"),
       supabase.from("fin_extratos").select("id").eq("empresa_id", empresaId).limit(1),
       supabase.from("fin_cartoes").select("id, empresa_id, nome, conta_caixa_id, dia_fechamento, dia_vencimento, ativo").eq("empresa_id", empresaId).order("nome"),
+      supabase.from("fin_estoque_contagens").select("id").eq("empresa_id", empresaId).limit(1),
     ]);
   if (!empresa) notFound();
   if (e1 || e2) throw new Error((e1 ?? e2)!.message);
   if (e3 && !semTabela(e3)) throw new Error(e3.message);
   if (e4 && !semTabela(e4)) throw new Error(e4.message);
   if (e5 && !semTabela(e5)) throw new Error(e5.message);
+  if (e6 && !semTabela(e6)) throw new Error(e6.message);
   return {
     empresa: { id: empresa.id, nome: empresa.nome, segmento: empresa.segmento ?? null } as { id: string; nome: string; segmento: string | null },
     // A chave da 0012: o financeiro desta empresa aparece na central da clínica (só para ver).
     naCentral: empresa.financeiro_na_central === true,
+    // A opção da 0018: esta empresa controla estoque (insumos, contagens e variação de estoque na DRE).
+    // Na central o nome vem por outra função, sem a opção: lá o resultado fica sem a variação.
+    estoqueAtivo: empresa.estoque_ativo === true && !e6,
     contas: (contas ?? []) as ContaPlano[],
     caixas: (caixas ?? []).map((c) => ({ ...c, saldo_inicial: Number(c.saldo_inicial) })) as ContaCaixa[],
     contrapartes: (contrapartes ?? []) as Contraparte[],
     cartoes: (cartoes ?? []) as Cartao[],
     // Recursos das migrations 0009, 0010 e 0011: só aparecem depois de aplicadas.
-    recursos: { fornecedores: !e3, extratos: !e4, cartoes: !e5 },
+    recursos: { fornecedores: !e3, extratos: !e4, cartoes: !e5, estoque: !e6 },
   };
 }
 
@@ -271,4 +278,67 @@ export async function carregarTransferencias(empresaId: string, inicio: string, 
     .order("data", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []).map((t) => ({ ...t, valor: Number(t.valor) })) as Transferencia[];
+}
+
+// ---------------------------------------------------------------------------
+// Estoque (0018)
+// ---------------------------------------------------------------------------
+
+const numeroOuNulo = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+
+export async function carregarItensEstoque(empresaId: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase.from("fin_estoque_itens").select("*").eq("empresa_id", empresaId).order("categoria", { nullsFirst: false }).order("nome");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((i) => ({ ...i, custo_unitario: numeroOuNulo(i.custo_unitario) })) as ItemEstoque[];
+}
+
+const lerLinha = (l: Record<string, unknown>) =>
+  ({ ...l, quantidade: Number(l.quantidade), custo_unitario: numeroOuNulo(l.custo_unitario) }) as LinhaContagem;
+
+// Contagens com as linhas (poucas por mês: cabem inteiras).
+export async function carregarContagens(empresaId: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("fin_estoque_contagens")
+    .select("*, linhas:fin_estoque_contagem_itens(*)")
+    .eq("empresa_id", empresaId)
+    .order("data", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(({ linhas, ...c }) => ({
+    ...(c as Contagem),
+    linhas: ((linhas ?? []) as Record<string, unknown>[]).map(lerLinha).sort((a, b) => a.ordem - b.ordem),
+  }));
+}
+
+// Valor de cada contagem fechada entre as datas, para a variação de estoque da DRE.
+export async function carregarValoresContagens(empresaId: string, inicio: string, fim: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("fin_estoque_contagens")
+    .select("data, situacao, linhas:fin_estoque_contagem_itens(quantidade, custo_unitario, fora_do_cmv)")
+    .eq("empresa_id", empresaId)
+    .eq("situacao", "fechada")
+    .gte("data", inicio)
+    .lte("data", fim);
+  if (error) {
+    if (semTabela(error)) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []).map((c) => ({
+    data: c.data as string,
+    situacao: c.situacao as Contagem["situacao"],
+    centavos: resumoContagem(((c.linhas ?? []) as Record<string, unknown>[]).map((l) => ({
+      quantidade: Number(l.quantidade),
+      custo_unitario: numeroOuNulo(l.custo_unitario),
+      fora_do_cmv: l.fora_do_cmv === true,
+    }))).centavos,
+  }));
+}
+
+// Variação de estoque de cada mês (para a linha 5 da DRE), pelas contagens fechadas.
+export async function carregarVariacoes(empresaId: string, meses: string[], inicio: string, fim: string) {
+  if (!meses.length) return [];
+  const contagens = await carregarValoresContagens(empresaId, diaAnterior(meses[0]), fim);
+  return variacoesEstoque(contagens, meses, inicio, fim);
 }

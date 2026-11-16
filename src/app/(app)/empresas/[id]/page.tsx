@@ -1,4 +1,4 @@
-import { Eye, FileText, FolderUp, History, MonitorSmartphone, Pencil, Plus, Wallet } from "lucide-react";
+import { Boxes, Eye, FileText, FolderUp, History, MonitorSmartphone, Pencil, Plus, Wallet } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BotaoAcao, BotaoExcluir } from "@/components/controles";
@@ -24,6 +24,7 @@ import { listarEquipe, ultimasAreas, usuarioAtual } from "@/lib/consultas";
 import { criarCliente } from "@/lib/supabase/server";
 import { definirFinanceiroNaCentral, liberarAcesso, reenviarConvite, removerAcesso } from "@/server/central";
 import { criarDiagnostico } from "@/server/diagnosticos";
+import { definirEstoqueAtivo } from "@/server/estoque";
 import { excluirContato, excluirEmpresa, salvarContato, salvarEmpresa } from "@/server/empresas";
 
 type Acesso = { id: string; email: string; nome: string | null; ultimo_acesso: string | null };
@@ -33,6 +34,8 @@ type EmpresaDetalhe = Empresa & {
   acessos_central: Acesso[];
   // Migration 0012: sem ela, a coluna não vem e a chave não aparece.
   financeiro_na_central?: boolean;
+  // Migration 0018: idem para o controle de estoque.
+  estoque_ativo?: boolean;
   diagnosticos: (Diagnostico & { responsavel: { nome: string } | null })[];
 };
 
@@ -235,7 +238,7 @@ export default async function PaginaEmpresa({ params }: PageProps<"/empresas/[id
 }
 
 // Razão social, inscrições, endereço e e-mail: o que a nota fiscal pede.
-function DadosCadastrais({ empresa }: { empresa: Empresa }) {
+function DadosCadastrais({ empresa }: { empresa: EmpresaDetalhe }) {
   const endereco = enderecoEmLinhas(empresa);
   const linhas = [
     ["Razão social", empresa.razao_social],
@@ -278,7 +281,41 @@ function DadosCadastrais({ empresa }: { empresa: Empresa }) {
           Falta {faltam.join(", ").replace(/, ([^,]*)$/, " e $1")} para emitir nota. Use “Editar”.
         </p>
       )}
+      {empresa.estoque_ativo !== undefined && <ControleEstoque empresa={empresa as EmpresaDetalhe & { estoque_ativo: boolean }} />}
     </Cartao>
+  );
+}
+
+// Opção por empresa (0018): liga a área Estoque no financeiro e a variação de estoque na linha 5 da DRE.
+// Para quem vende mercadoria (cafeteria, loja); clínicas ficam desligadas.
+function ControleEstoque({ empresa }: { empresa: EmpresaDetalhe & { estoque_ativo: boolean } }) {
+  const ligado = empresa.estoque_ativo;
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-sm">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 font-medium text-slate-900">
+          <Boxes className="size-4 text-slate-400" />
+          Controle de estoque e CMV: {ligado ? "ligado" : "desligado"}
+        </div>
+        <div className="text-xs text-slate-500">
+          {ligado
+            ? "O financeiro tem a área Estoque, e o CMV da DRE considera as contagens fechadas."
+            : "Para empresas que vendem mercadoria: contagens de estoque, custo dos insumos e CMV pelo consumo."}
+        </div>
+      </div>
+      <BotaoAcao
+        acao={definirEstoqueAtivo.bind(null, empresa.id, !ligado)}
+        pergunta={
+          ligado
+            ? "Desligar o controle de estoque? A área Estoque some e a DRE volta a mostrar só as compras na linha 5. Contagens e insumos ficam guardados."
+            : "Ligar o controle de estoque nesta empresa? Aparece a área Estoque no financeiro, e a DRE passa a usar as contagens fechadas no CMV."
+        }
+        aviso={ligado ? "Controle de estoque desligado" : "Controle de estoque ligado"}
+        className={classeBotao(ligado ? "fantasma" : "secundario", true)}
+      >
+        {ligado ? "Desligar" : "Ligar"}
+      </BotaoAcao>
+    </div>
   );
 }
 

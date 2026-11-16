@@ -17,7 +17,7 @@ export type Evento = {
 export const GRUPOS = {
   diagnosticos: ["diagnosticos", "solicitacoes", "indicadores", "achados", "oportunidades", "acoes"],
   cadastros: ["empresas", "contatos", "acessos_central", "perfis", "assessoria"],
-  financeiro: ["fin_lancamentos", "fin_contas"],
+  financeiro: ["fin_lancamentos", "fin_contas", "fin_estoque_itens", "fin_estoque_contagens"],
   arquivos: ["envios_arquivos", "envios_itens", "envios_dispensas"],
 } as const;
 export type Grupo = keyof typeof GRUPOS;
@@ -36,6 +36,8 @@ export const ROTULO_TABELA: Record<string, string> = {
   assessoria: "Dados da assessoria",
   fin_lancamentos: "Lançamento",
   fin_contas: "Conta do plano",
+  fin_estoque_itens: "Insumo do estoque",
+  fin_estoque_contagens: "Contagem de estoque",
   envios_arquivos: "Arquivo enviado",
   envios_itens: "Item da lista de arquivos",
   envios_dispensas: "Arquivo dispensado no mês",
@@ -88,7 +90,8 @@ const ROTULO_CAMPO: Record<string, string> = {
   acao: "Ação", link: "Link", data_solicitacao: "Pedido em", data_recebimento: "Recebido em", evidencia: "Evidência",
   causa_provavel: "Causa provável", impacto: "Impacto", potencial_impacto: "Potencial de impacto",
   esforco_estimado: "Esforço estimado", situacao_atual: "Situação atual", recomendacoes: "Recomendações",
-  ultimo_acesso: "Último acesso", financeiro_na_central: "Financeiro na central", logo_url: "Logo", foto_url: "Foto",
+  ultimo_acesso: "Último acesso", financeiro_na_central: "Financeiro na central", estoque_ativo: "Controle de estoque",
+  custo_unitario: "Custo por unidade", fora_do_cmv: "Fora do CMV", fechada_em: "Fechada em", logo_url: "Logo", foto_url: "Foto",
   motivo_nao_calculavel: "Motivo de não calcular", ressalva: "Ressalva", significado: "Significado",
   cor_manual: "Cor manual", tolerancia: "Tolerância", referencia: "Referência", periodo: "Período",
   direcao: "Entrada ou saída", valor_total: "Valor", conta_caixa_id: "Conta de caixa",
@@ -193,6 +196,8 @@ export function nomeDaLinha(tabela: string, l: Record<string, unknown> | null | 
       return s(l.nome_fantasia) ?? s(l.razao_social);
     case "fin_contas":
       return s(l.codigo) && s(l.nome) ? `${l.codigo} ${l.nome}` : s(l.nome);
+    case "fin_estoque_contagens":
+      return typeof l.data === "string" ? `Contagem de ${l.data.split("-").reverse().join("/")}` : null;
     case "fin_lancamentos": {
       const d = s(l.descricao);
       const v = typeof l.valor_total === "number" ? moeda.format(l.valor_total) : null;
