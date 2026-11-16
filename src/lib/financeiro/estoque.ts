@@ -440,3 +440,11 @@ export function medidaInicial(opcoes: OpcaoMedida[]) {
 
 // Valor na medida escolhida, sem a sujeira do ponto flutuante (0,02 kg → 20 g, não 20,000000000000004).
 export const naMedida = (quantidadeContada: number, fator: number) => Number((quantidadeContada / fator).toFixed(6));
+
+// Texto para busca: sem acento e em minúsculas, para "acucar" achar "Açúcar".
+export const paraBusca = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .trim();

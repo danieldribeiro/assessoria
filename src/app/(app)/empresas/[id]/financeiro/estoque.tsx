@@ -4,7 +4,8 @@ import { BotaoAcao } from "@/components/controles";
 import { Formulario } from "@/components/formulario";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, classeInput, cx, classeTabela as t } from "@/components/ui";
 import { carregarContagens, carregarItensEstoque } from "@/lib/financeiro/consultas";
-import { MEDIDAS_CONTEUDO, linhaComCusto, medidaPadronizada, resumoContagem, valorLinha } from "@/lib/financeiro/estoque";
+import { MEDIDAS_CONTEUDO, linhaComCusto, medidaPadronizada, paraBusca, resumoContagem, valorLinha } from "@/lib/financeiro/estoque";
+import { FiltroLista } from "./filtro-lista";
 import { paraCampoBR } from "@/lib/numeros";
 import { apagarContagem, fecharContagem, reabrirContagem, salvarCustos } from "@/server/estoque";
 import { ImportarContagem, ImportarCustos } from "./importar-estoque";
@@ -227,6 +228,17 @@ export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
                 {plural(semCusto, "insumo ainda está sem custo", "insumos ainda estão sem custo")}.
               </p>
             )}
+            <FiltroLista
+              alvo="lista-insumos"
+              rotuloBusca="Buscar insumo"
+              categorias={[...new Set(itens.map((i) => i.categoria).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, "pt-BR"))}
+              situacoes={[
+                { valor: "sem-custo", rotulo: "Sem custo" },
+                { valor: "com-custo", rotulo: "Com custo" },
+                ...(comConteudo ? [{ valor: "sem-conteudo", rotulo: "Por unidade, sem conteúdo" }] : []),
+                { valor: "fora-cmv", rotulo: "Fora do CMV" },
+              ]}
+            />
             <Formulario acao={salvarCustos.bind(null, empresa.id)} aviso="Custos salvos" rotuloSalvar="Salvar custos">
               <div className="-mx-5 -mt-5 overflow-x-auto">
                 <table className={t.tabela}>
@@ -242,9 +254,19 @@ export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
                       <th className={`${t.th} w-24 text-center`}>Fora do CMV</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody id="lista-insumos">
                     {itens.map((i) => (
-                      <tr key={i.id} className={cx(t.linha, i.fora_do_cmv && "text-slate-400")}>
+                      <tr
+                        key={i.id}
+                        className={cx(t.linha, i.fora_do_cmv && "text-slate-400")}
+                        data-filtro=""
+                        data-busca={paraBusca(`${i.nome} ${i.categoria ?? ""}`)}
+                        data-categoria={i.categoria ?? ""}
+                        data-situacoes={[
+                          i.fora_do_cmv ? "fora-cmv" : i.custo_unitario === null ? "sem-custo" : "com-custo",
+                          comConteudo && !medidaPadronizada(i.unidade) && !i.conteudo ? "sem-conteudo" : "",
+                        ].join(" ")}
+                      >
                         <td className="px-5 py-2">
                           {i.nome}
                           {i.categoria && <span className="block text-xs text-slate-500">{i.categoria}</span>}
