@@ -101,12 +101,12 @@ export function EditorFicha({
               {linhas.map((l) => {
                 const insumo = porId.get(l.item_id);
                 return (
-                  <li key={l.chave} className="flex items-center gap-2">
+                  <li key={l.chave} className="grid grid-cols-[minmax(0,1fr)_6.5rem_3rem_auto] items-center gap-2">
                     <select
                       value={l.item_id}
                       onChange={(e) => mudar(l.chave, "item_id", e.target.value)}
                       aria-label="Insumo"
-                      className={cx(classeInput, "min-w-0 flex-1 pr-8")}
+                      className={cx(classeInput, "pr-8")}
                     >
                       <option value="">Escolha o insumo…</option>
                       {insumos.map((i) => (
@@ -121,9 +121,9 @@ export function EditorFicha({
                       inputMode="decimal"
                       placeholder="0,000"
                       aria-label={`Quantidade de ${insumo?.nome ?? "insumo"}`}
-                      className={cx(classeInput, "w-24 text-right tabular-nums")}
+                      className={cx(classeInput, "text-right tabular-nums")}
                     />
-                    <span className="w-14 truncate text-xs text-slate-500">{insumo?.unidade ?? ""}</span>
+                    <span className="truncate text-xs text-slate-500">{insumo?.unidade ?? ""}</span>
                     <button
                       type="button"
                       onClick={() => setLinhas((ls) => ls.filter((x) => x.chave !== l.chave))}
