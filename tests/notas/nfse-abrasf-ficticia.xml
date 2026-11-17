@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<CompNfse xmlns="http://www.abrasf.org.br/nfse.xsd"><Nfse><InfNfse>
+  <Numero>996</Numero><CodigoVerificacao>ABC123</CodigoVerificacao><DataEmissao>2026-10-20T09:00:00</DataEmissao>
+  <OutrasInformacoes>Ref. Nota Fiscal nº 0004321</OutrasInformacoes>
+  <Servico><Valores><ValorServicos>120.00</ValorServicos><ValorLiquidoNfse>118.20</ValorLiquidoNfse></Valores><Discriminacao>Servico ficticio</Discriminacao></Servico>
+  <PrestadorServico><IdentificacaoPrestador><Cnpj>00000000000191</Cnpj></IdentificacaoPrestador><RazaoSocial>Prestador Ficticio</RazaoSocial></PrestadorServico>
+</InfNfse></Nfse></CompNfse>

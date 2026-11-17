@@ -3,6 +3,7 @@
 // Estoque e CMV (migração 0018). As planilhas são lidas no navegador (src/lib/xlsx.ts e src/lib/financeiro/estoque.ts);
 // aqui chegam só os itens, conferidos de novo antes de gravar.
 import { MEDIDAS_CONTEUDO, chaveNome, type FichaImportada, type ItemImportado, type VendaImportada } from "@/lib/financeiro/estoque";
+import { conferirNota, type NotaEnviada } from "@/lib/financeiro/notas";
 import { lerNumeroBR } from "@/lib/numeros";
 import { criarCliente } from "@/lib/supabase/server";
 import { atualizarTelas, exigir, marcado, texto } from "@/server/util";
@@ -16,6 +17,9 @@ const MENSAGENS: Record<string, string> = {
   fin_estoque_produtos_nome_unico: "Já existe um produto com esse nome.",
   fin_estoque_ficha_itens_insumo_unico: "O mesmo insumo aparece duas vezes na ficha. Junte as quantidades numa linha só.",
   fin_estoque_ficha_itens_item: "Esse insumo é usado em alguma ficha técnica e não pode sair.",
+  fin_estoque_notas_chave_unica: "Esta nota já foi lançada (mesma chave). Abra a que existe para mudar.",
+  fin_estoque_notas_lancamentos_lancamento: "O lançamento escolhido não existe mais.",
+  fin_contrapartes_nome_unico: "Já existe um fornecedor com esse nome.",
 };
 
 function falhaEstoque(error: { message: string } | null) {
@@ -60,8 +64,14 @@ export async function importarContagem(empresaId: string, d: { data: string; arq
 
 export async function fecharContagem(id: string) {
   const supabase = await criarCliente();
-  const { error } = await supabase.rpc("fin_estoque_fechar_contagem", { p_id: id });
+  const { data: contagem, error } = await supabase.rpc("fin_estoque_fechar_contagem", { p_id: id });
   if (error) return falhaEstoque(error);
+  // Fechar a contagem recomeça o custo médio dos insumos com nota de compra (0026). Antes da 0026 a função não existe.
+  const { data: c } = await supabase.from("fin_estoque_contagens").select("empresa_id").eq("id", contagem ?? id).maybeSingle();
+  if (c) {
+    const { error: e } = await supabase.rpc("fin_estoque_recalcular_custos", { p_empresa: c.empresa_id });
+    if (e && !/fin_estoque_recalcular_custos/.test(e.message)) console.error(e);
+  }
   atualizarTelas();
 }
 
@@ -282,5 +292,61 @@ export async function mudarAtivacaoProduto(id: string, ativo: boolean) {
   const supabase = await criarCliente();
   const { error } = await supabase.from("fin_estoque_produtos").update({ ativo }).eq("id", id);
   exigir(error);
+  atualizarTelas();
+}
+
+// Notas de compra (0026). O XML é lido no navegador (src/lib/financeiro/notas.ts); aqui chega a nota conferida.
+export async function salvarNota(empresaId: string, id: string | null, nota: NotaEnviada) {
+  const motivo = conferirNota(nota);
+  if (motivo) return { erro: motivo };
+  if (nota.itens.length > MAX_ITENS) return { erro: "Itens demais na nota." };
+  const r = (c: number) => Math.round(c) / 100;
+  const f = nota.financeiro;
+  const p = {
+    tipo: nota.tipo,
+    chave: curto(nota.chave, 100),
+    numero: curto(nota.numero, 30),
+    serie: curto(nota.serie, 10),
+    emissao: nota.emissao || null,
+    entrada: nota.entrada,
+    contraparte_id: nota.contraparte_id || null,
+    emitente_documento: curto(nota.emitente_documento, 20),
+    emitente_nome: curto(nota.emitente_nome, 200),
+    valor_total: r(nota.valor_total),
+    valor_frete: nota.tipo === "produto" ? r(nota.valor_frete) : 0,
+    nota_produto_id: nota.tipo === "servico" ? nota.nota_produto_id || null : null,
+    remessa: nota.tipo === "produto" ? curto(nota.remessa, 60) : null,
+    origem: nota.origem === "xml" ? "xml" : "manual",
+    arquivo_nome: curto(nota.arquivo_nome, 200),
+    informacoes: curto(nota.informacoes, 2000),
+    observacoes: curto(nota.observacoes, 1000),
+    itens: nota.itens.map((i) => ({
+      codigo: curto(i.codigo, 60),
+      descricao: curto(i.descricao, 300),
+      unidade: curto(i.unidade, 20),
+      quantidade: Math.round(i.quantidade * 10000) / 10000,
+      valor: r(i.valor),
+      item_id: i.criar_insumo ? null : i.item_id || null,
+      fator: Math.round(i.fator * 10000) / 10000,
+      criar_insumo: i.criar_insumo ? { nome: curto(i.criar_insumo.nome, 200), unidade: curto(i.criar_insumo.unidade, 20) ?? "un" } : null,
+    })),
+    financeiro:
+      f.modo === "criar"
+        ? { ...f, duplicatas: f.duplicatas.map((d) => ({ numero: curto(d.numero, 20), vencimento: d.vencimento, valor: r(d.valor) })) }
+        : f.modo === "ligar"
+          ? { modo: "ligar", lancamentos: f.lancamentos.slice(0, 50) }
+          : { modo: f.modo },
+  };
+  const supabase = await criarCliente();
+  const { data, error } = await supabase.rpc("fin_estoque_salvar_nota", { p_empresa: empresaId, p_id: id, p_nota: p });
+  if (error) return falhaEstoque(error)!;
+  atualizarTelas();
+  return { id: data as string };
+}
+
+export async function apagarNota(id: string) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_estoque_apagar_nota", { p_id: id });
+  if (error) return falhaEstoque(error);
   atualizarTelas();
 }
