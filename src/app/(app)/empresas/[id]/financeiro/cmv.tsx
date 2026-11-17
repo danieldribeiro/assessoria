@@ -6,6 +6,7 @@ import type { ContaPlano } from "@/lib/financeiro/dominio";
 import { carregarCmvReal, carregarItensEstoque, carregarProdutos, carregarVendas } from "@/lib/financeiro/consultas";
 import { cmvTeorico } from "@/lib/financeiro/estoque";
 import { apagarVendas, fecharCmvMes, reabrirCmvMes } from "@/server/estoque";
+import { EditorComplementos } from "./complementos";
 import { ImportarVendas } from "./importar-estoque";
 
 const moeda = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -44,6 +45,10 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
   // Fechar o mês (0023): só aparece depois da migração. Fechado, o teórico usa os custos gravados no fechamento.
   const podeFechar = "fechado_em" in aberta;
   const fechado = !!aberta.fechado_em;
+  // Complementos (0025): adicionais digitados no mês. Só aparecem depois da migração.
+  const temComplementos = aberta.linhas.length > 0 && "complemento" in aberta.linhas[0];
+  const complementos = aberta.linhas.filter((l) => l.complemento);
+  const vendaComplementos = complementos.reduce((a, l) => a + Math.round((l.valor ?? 0) * 100), 0);
   const teorico = cmvTeorico(aberta.linhas, fichas, new Map(itens.map((i) => [i.id, i])), fechado);
   const realMes = await carregarCmvReal(empresa.id, contas, aberta.mes);
   const linhas = [...teorico.linhas].sort((a, b) => (b.venda ?? 0) - (a.venda ?? 0) || b.quantidade - a.quantidade);
@@ -87,6 +92,14 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
               >
                 Apagar vendas
               </BotaoAcao>
+              {temComplementos && (
+                <EditorComplementos
+                  vendaId={aberta.id}
+                  mes={rotuloMes(aberta.mes)}
+                  atuais={complementos.map((l) => ({ nome: l.nome_origem, quantidade: l.quantidade, valor: l.valor }))}
+                  sugestoes={produtos.filter((p) => p.categoria === "Complementos").map((p) => p.nome)}
+                />
+              )}
               {podeFechar && (
                 <BotaoAcao
                   acao={fecharCmvMes.bind(null, aberta.id)}
@@ -119,7 +132,11 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
           </nav>
         )}
         <dl className="grid grid-cols-2 gap-4 px-5 py-4 lg:grid-cols-4">
-          <Numero rotulo="Vendas no PDV" valor={moeda(teorico.venda)} nota={`${linhas.length} produtos`} />
+          <Numero
+            rotulo="Vendas no PDV"
+            valor={moeda(teorico.venda)}
+            nota={`${linhas.length - complementos.length} produtos${complementos.length ? ` · ${moeda(vendaComplementos)} de complementos` : ""}`}
+          />
           <Numero
             rotulo="CMV teórico"
             valor={moeda(teorico.cmv)}
@@ -160,6 +177,12 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
                   quando os custos estiverem certos para ele.
                 </>
               )}
+            </p>
+          )}
+          {temComplementos && !fechado && complementos.length === 0 && (
+            <p className="text-xs text-slate-500">
+              Adicionais cobrados à parte (leite de aveia, sem lactose, chantilly...) não vêm no relatório do PDV. Lance em “Lançar
+              complementos” para entrarem no teórico.
             </p>
           )}
           {comparaveis.length > 0 && totalTabela !== totalCobrado && (
@@ -240,6 +263,11 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
                 <tr key={`${l.nome}-${i}`} className={t.linha}>
                   <td className="px-5 py-2">
                     {l.nome}
+                    {l.complemento && (
+                      <Etiqueta className="ml-2" tom="cinza">
+                        complemento
+                      </Etiqueta>
+                    )}
                     {l.custoUnitario === null ? (
                       <Etiqueta className="ml-2" tom="ambar">
                         sem ficha
@@ -310,7 +338,8 @@ function Explicacao() {
       compras do mês (linha 5 da DRE, por competência) + estoque inicial − estoque final, pelas contagens fechadas. Real acima do
       teórico aponta perda, desperdício, porção maior que a ficha, consumo interno ou compra lançada no mês errado. Os percentuais
       são sobre o total vendido no relatório do PDV; “pelo preço de venda” refaz a conta com o preço do cardápio de cada produto
-      (só os que têm preço).
+      (só os que têm preço). Complementos são os adicionais cobrados à parte, lançados à mão a cada mês, com a dose média na ficha de
+      cada um.
     </p>
   );
 }
