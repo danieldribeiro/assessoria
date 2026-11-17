@@ -399,3 +399,120 @@ export async function carregarCmvReal(empresaId: string, contas: ContaPlano[], m
   const centavos = variacao?.centavos ?? null;
   return { compras, variacao: centavos, cmv: centavos === null ? compras : compras - centavos, motivo: centavos === null ? variacao : null };
 }
+
+// ---------------------------------------------------------------------------
+// Notas de compra (0026)
+// ---------------------------------------------------------------------------
+
+export type LinhaNota = {
+  id: string;
+  ordem: number;
+  codigo: string | null;
+  descricao: string;
+  unidade: string | null;
+  quantidade: number;
+  valor: number; // centavos, como os demais valores das notas
+  servico: number;
+  frete: number;
+  custo: number;
+  item_id: string | null;
+  fator: number;
+};
+export type NotaCompra = {
+  id: string;
+  tipo: "produto" | "servico";
+  chave: string | null;
+  numero: string | null;
+  serie: string | null;
+  emissao: string | null;
+  entrada: string;
+  contraparte_id: string | null;
+  emitente_documento: string | null;
+  emitente_nome: string;
+  valor_total: number;
+  valor_frete: number;
+  nota_produto_id: string | null;
+  remessa: string | null;
+  origem: "xml" | "manual";
+  arquivo_nome: string | null;
+  observacoes: string | null;
+  itens: LinhaNota[];
+  lancamentos: string[];
+};
+
+const centavos = (v: unknown) => Math.round(Number(v ?? 0) * 100);
+
+// Notas com entrada a partir da data (a tela mostra os últimos meses). null = a 0026 ainda não foi aplicada.
+export async function carregarNotas(empresaId: string, desde: string): Promise<NotaCompra[] | null> {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("fin_estoque_notas")
+    .select("*, itens:fin_estoque_notas_itens(*), lancamentos:fin_estoque_notas_lancamentos(lancamento_id)")
+    .eq("empresa_id", empresaId)
+    .gte("entrada", desde)
+    .order("entrada", { ascending: false })
+    .order("criado_em", { ascending: false });
+  if (semTabela(error)) return null;
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(({ itens, lancamentos, ...n }) => ({
+    ...(n as Omit<NotaCompra, "itens" | "lancamentos">),
+    valor_total: centavos(n.valor_total),
+    valor_frete: centavos(n.valor_frete),
+    itens: ((itens ?? []) as Record<string, unknown>[])
+      .map((i) => ({
+        ...(i as unknown as LinhaNota),
+        quantidade: Number(i.quantidade),
+        fator: Number(i.fator),
+        valor: centavos(i.valor),
+        servico: centavos(i.servico),
+        frete: centavos(i.frete),
+        custo: centavos(i.custo),
+      }))
+      .sort((a, b) => a.ordem - b.ordem),
+    lancamentos: ((lancamentos ?? []) as { lancamento_id: string }[]).map((l) => l.lancamento_id),
+  }));
+}
+
+export type DeParaNota = { fornecedor: string; chave: string; item_id: string | null; fator: number; ignorar: boolean };
+
+export async function carregarDePara(empresaId: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase.from("fin_estoque_depara").select("fornecedor, chave, item_id, fator, ignorar").eq("empresa_id", empresaId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((d) => ({ ...d, fator: Number(d.fator) })) as DeParaNota[];
+}
+
+// Pagamentos (saídas não canceladas) com competência ou vencimento a partir da data, para ligar à nota.
+export type SaidaParaLigar = {
+  id: string;
+  descricao: string | null;
+  documento: string | null;
+  contraparte_id: string | null;
+  valor: number; // centavos
+  competencia: string;
+  vencimento: string | null;
+  situacao: string;
+};
+export async function carregarSaidasParaLigar(empresaId: string, desde: string) {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("fin_lancamentos")
+    .select("id, descricao, documento, contraparte_id, valor_total, data_competencia, data_vencimento, situacao")
+    .eq("empresa_id", empresaId)
+    .eq("direcao", "saida")
+    .neq("situacao", "cancelado")
+    .gte("data_competencia", desde)
+    .order("data_competencia", { ascending: false })
+    .limit(1000);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((l) => ({
+    id: l.id,
+    descricao: l.descricao,
+    documento: l.documento,
+    contraparte_id: l.contraparte_id,
+    valor: centavos(l.valor_total),
+    competencia: l.data_competencia,
+    vencimento: l.data_vencimento,
+    situacao: l.situacao,
+  })) as SaidaParaLigar[];
+}
