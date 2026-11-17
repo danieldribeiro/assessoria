@@ -212,6 +212,26 @@ export async function reabrirCmvMes(id: string) {
   atualizarTelas();
 }
 
+// Complementos do mês (0025): adicionais cobrados à parte que o relatório do PDV não traz. Troca a lista inteira do mês.
+export async function salvarComplementos(vendaId: string, itens: { nome: string; quantidade: number; valor: number | null }[]) {
+  if (!Array.isArray(itens) || itens.length > 200) return { erro: "Complementos inválidos." };
+  const limpos = [];
+  const vistos = new Set<string>();
+  for (const i of itens) {
+    const nome = curto(i?.nome, 200);
+    if (!nome) return { erro: "Informe o nome de cada complemento." };
+    if (!numeroValido(i.quantidade, 0)) return { erro: `Quantidade de ${nome} inválida.` };
+    if (i.valor !== null && !numeroValido(i.valor, 0)) return { erro: `Total de ${nome} inválido.` };
+    if (vistos.has(chaveNome(nome))) return { erro: `${nome} aparece duas vezes. Junte numa linha só.` };
+    vistos.add(chaveNome(nome));
+    limpos.push({ nome, quantidade: Math.round(i.quantidade * 1000) / 1000, valor: i.valor === null ? null : Math.round(i.valor * 100) / 100 });
+  }
+  const supabase = await criarCliente();
+  const { error } = await supabase.rpc("fin_estoque_salvar_complementos", { p_venda: vendaId, p_itens: limpos });
+  if (error) return falhaEstoque(error);
+  atualizarTelas();
+}
+
 export async function importarFichas(empresaId: string, fichas: FichaImportada[]) {
   if (!Array.isArray(fichas) || fichas.length === 0) return { erro: "A planilha não tem fichas." };
   if (fichas.length > MAX_ITENS) return { erro: "Fichas demais na planilha." };

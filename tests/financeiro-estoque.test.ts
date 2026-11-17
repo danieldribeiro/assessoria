@@ -224,6 +224,18 @@ describe("fichas técnicas", () => {
     expect(fechado.semFicha.produtos).toBe(1);
     expect(cmvTeorico(vendas, fichas, hoje).cmv).toBe(Math.round(10 * 0.018 * 129.9 * 100)); // aberto: custo de hoje
   });
+  it("complemento lançado no mês entra no teórico com a ficha dele e fica marcado", () => {
+    const itens = new Map([["aveia", { custo_unitario: 11.9 }]]);
+    const fichas = new Map([["adicional-aveia", [{ item_id: "aveia", quantidade: 0.25 }]]]);
+    const r = cmvTeorico(
+      [{ produto_id: "adicional-aveia", nome_origem: "Leite de aveia (adicional)", categoria_origem: "Complementos", quantidade: 100, valor: 400, complemento: true }],
+      fichas,
+      itens,
+    );
+    expect(r.cmv).toBe(29750); // 100 × 0,25 L × 11,90
+    expect(r.venda).toBe(40000);
+    expect(r.linhas[0].complemento).toBe(true);
+  });
 });
 
 describe("medidas da ficha técnica", () => {
