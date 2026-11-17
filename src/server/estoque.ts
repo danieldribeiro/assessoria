@@ -4,6 +4,7 @@
 // aqui chegam só os itens, conferidos de novo antes de gravar.
 import { MEDIDAS_CONTEUDO, chaveNome, type FichaImportada, type ItemImportado, type VendaImportada } from "@/lib/financeiro/estoque";
 import { conferirNota, type NotaEnviada } from "@/lib/financeiro/notas";
+import { MOTIVOS_PERDA } from "@/lib/financeiro/perdas";
 import { lerNumeroBR } from "@/lib/numeros";
 import { criarCliente } from "@/lib/supabase/server";
 import { atualizarTelas, exigir, marcado, texto } from "@/server/util";
@@ -17,6 +18,7 @@ const MENSAGENS: Record<string, string> = {
   fin_estoque_produtos_nome_unico: "Já existe um produto com esse nome.",
   fin_estoque_ficha_itens_insumo_unico: "O mesmo insumo aparece duas vezes na ficha. Junte as quantidades numa linha só.",
   fin_estoque_ficha_itens_item: "Esse insumo é usado em alguma ficha técnica e não pode sair.",
+  "row-level security": "Sem permissão para gravar aqui (ou o controle de estoque está desligado nesta empresa).",
   fin_estoque_notas_chave_unica: "Esta nota já foi lançada (mesma chave). Abra a que existe para mudar.",
   fin_estoque_notas_lancamentos_lancamento: "O lançamento escolhido não existe mais.",
   fin_contrapartes_nome_unico: "Já existe um fornecedor com esse nome.",
@@ -347,6 +349,36 @@ export async function salvarNota(empresaId: string, id: string | null, nota: Not
 export async function apagarNota(id: string) {
   const supabase = await criarCliente();
   const { error } = await supabase.rpc("fin_estoque_apagar_nota", { p_id: id });
+  if (error) return falhaEstoque(error);
+  atualizarTelas();
+}
+
+// Perdas de estoque (0027). O custo do insumo é gravado pelo banco na hora de anotar.
+export async function lancarPerda(empresaId: string, dados: FormData) {
+  const data = texto(dados, "data");
+  const item = texto(dados, "item_id");
+  const motivo = texto(dados, "motivo");
+  if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return { erro: "Informe a data da perda." };
+  if (!item) return { erro: "Escolha o insumo." };
+  if (!MOTIVOS_PERDA.some((m) => m.valor === motivo)) return { erro: "Escolha o motivo." };
+  const q = lerNumeroBR(texto(dados, "quantidade"));
+  if (q.estado !== "valido" || q.valor <= 0) return { erro: "Informe a quantidade perdida (use vírgula para decimais)." };
+  const supabase = await criarCliente();
+  const { error } = await supabase.from("fin_estoque_perdas").insert({
+    empresa_id: empresaId,
+    data,
+    item_id: item,
+    quantidade: Math.round(q.valor * 1000) / 1000,
+    motivo,
+    observacao: curto(texto(dados, "observacao"), 300),
+  });
+  if (error) return falhaEstoque(error);
+  atualizarTelas();
+}
+
+export async function apagarPerda(id: string) {
+  const supabase = await criarCliente();
+  const { error } = await supabase.from("fin_estoque_perdas").delete().eq("id", id);
   if (error) return falhaEstoque(error);
   atualizarTelas();
 }

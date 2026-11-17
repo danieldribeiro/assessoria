@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Cartao, ContaCaixa, ContaPlano, Contraparte, Extrato, Fatura, Lancamento, Movimento, Saldo, Transferencia } from "@/lib/financeiro/dominio";
 import { diaAnterior, resumoContagem, variacoesEstoque, type Contagem, type ItemEstoque, type LinhaContagem, type LinhaFicha, type LinhaVenda, type Produto, type VendaMes } from "@/lib/financeiro/estoque";
 import { montarDre, parcelas } from "@/lib/financeiro/painel";
+import type { Perda } from "@/lib/financeiro/perdas";
 import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
 import type { MovimentoConta } from "@/lib/financeiro/fluxo";
 import { criarCliente } from "@/lib/supabase/server";
@@ -515,4 +516,23 @@ export async function carregarSaidasParaLigar(empresaId: string, desde: string) 
     vencimento: l.data_vencimento,
     situacao: l.situacao,
   })) as SaidaParaLigar[];
+}
+
+// ---------------------------------------------------------------------------
+// Perdas de estoque (0027). null = a migração ainda não foi aplicada.
+// ---------------------------------------------------------------------------
+
+export async function carregarPerdas(empresaId: string, inicio: string, fim: string): Promise<Perda[] | null> {
+  const supabase = await criarCliente();
+  const { data, error } = await supabase
+    .from("fin_estoque_perdas")
+    .select("id, data, item_id, quantidade, motivo, custo_unitario, observacao")
+    .eq("empresa_id", empresaId)
+    .gte("data", inicio)
+    .lte("data", fim)
+    .order("data", { ascending: false })
+    .order("criado_em", { ascending: false });
+  if (semTabela(error)) return null;
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((p) => ({ ...p, quantidade: Number(p.quantidade), custo_unitario: numeroOuNulo(p.custo_unitario) })) as Perda[];
 }

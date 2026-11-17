@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Boxes, CalendarClock, ChartPie, ClipboardList, ChevronRight, CookingPot, CreditCard, FileInput, FileText, Landmark, LayoutDashboard, ListTree, ReceiptText, Scale, Store, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, Boxes, CalendarClock, ChartPie, ClipboardList, ChevronRight, CookingPot, CreditCard, FileInput, FileText, Landmark, LayoutDashboard, ListTree, PackageX, ReceiptText, Scale, Store, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { classeBotao, cx } from "@/components/ui";
 import { hoje } from "@/lib/datas";
@@ -17,6 +17,7 @@ import { lerPeriodo } from "@/lib/financeiro/periodo";
 import { HORIZONTES } from "@/lib/financeiro/projecao";
 import { AbaLancamentos } from "./lancamentos";
 import { AbaNotas } from "./notas";
+import { AbaPerdas } from "./perdas";
 import { AbaPainel, lerFiltros } from "./painel";
 import { AbaPlanoContas } from "./plano-contas";
 import { AbaResultado } from "./resultado";
@@ -50,6 +51,7 @@ const GRUPOS: { nome: string; abas: Aba[] }[] = [
       { aba: "fichas", nome: "Fichas técnicas", icone: CookingPot, recurso: "fichas" },
       { aba: "notas", nome: "Notas de compra", icone: FileInput, recurso: "estoque" },
       { aba: "contagens", nome: "Contagens", icone: ClipboardList, recurso: "estoque" },
+      { aba: "perdas", nome: "Perdas", icone: PackageX, recurso: "estoque" },
       { aba: "insumos", nome: "Insumos", icone: Boxes, recurso: "estoque" },
     ],
   },
@@ -176,6 +178,7 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
           {aba === "fornecedores" && <AbaFornecedores empresa={empresa} contrapartes={dados.contrapartes} periodo={periodo} />}
           {aba === "contagens" && <AbaContagens empresa={empresa} contagemId={valor("contagem") ?? null} />}
           {aba === "insumos" && <AbaInsumos empresa={empresa} />}
+          {aba === "perdas" && <AbaPerdas empresa={empresa} mes={valor("mes")} />}
           {aba === "notas" && <AbaNotas empresa={empresa} contas={dados.contas} caixas={dados.caixas} contrapartes={dados.contrapartes} />}
           {aba === "fichas" && <AbaFichas empresa={empresa} />}
           {aba === "cmv" && <AbaCmv empresa={empresa} contas={dados.contas} mes={valor("mes")} />}

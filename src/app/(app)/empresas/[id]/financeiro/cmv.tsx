@@ -3,7 +3,9 @@ import Link from "next/link";
 import { BotaoAcao } from "@/components/controles";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, cx, classeTabela as t } from "@/components/ui";
 import type { ContaPlano } from "@/lib/financeiro/dominio";
-import { carregarCmvReal, carregarItensEstoque, carregarProdutos, carregarVendas } from "@/lib/financeiro/consultas";
+import { carregarCmvReal, carregarItensEstoque, carregarPerdas, carregarProdutos, carregarVendas } from "@/lib/financeiro/consultas";
+import { ultimoDiaDoMes } from "@/lib/financeiro/fluxo";
+import { resumoPerdas } from "@/lib/financeiro/perdas";
 import { cmvTeorico } from "@/lib/financeiro/estoque";
 import { apagarVendas, fecharCmvMes, reabrirCmvMes } from "@/server/estoque";
 import { EditorComplementos } from "./complementos";
@@ -50,7 +52,9 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
   const complementos = aberta.linhas.filter((l) => l.complemento);
   const vendaComplementos = complementos.reduce((a, l) => a + Math.round((l.valor ?? 0) * 100), 0);
   const teorico = cmvTeorico(aberta.linhas, fichas, new Map(itens.map((i) => [i.id, i])), fechado);
-  const realMes = await carregarCmvReal(empresa.id, contas, aberta.mes);
+  const [realMes, perdasMes] = await Promise.all([carregarCmvReal(empresa.id, contas, aberta.mes), carregarPerdas(empresa.id, aberta.mes, ultimoDiaDoMes(aberta.mes))]);
+  // Perdas anotadas no mês (0027): a parte da diferença real − teórico que tem explicação. Não mudam o CMV real.
+  const perdas = perdasMes ? resumoPerdas(perdasMes) : null;
   const linhas = [...teorico.linhas].sort((a, b) => (b.venda ?? 0) - (a.venda ?? 0) || b.quantidade - a.quantidade);
   const pTeorico = parte(teorico.cmv, teorico.vendaComFicha);
   const pReal = realMes.variacao === null ? null : parte(realMes.cmv, teorico.venda);
@@ -235,6 +239,28 @@ export async function AbaCmv({ empresa, contas, mes }: { empresa: { id: string }
           ) : (
             <p className="text-xs text-slate-500">
               CMV real = compras do mês na DRE ({moeda(realMes.compras)}) − variação do estoque ({moeda(realMes.variacao)}).
+            </p>
+          )}
+          {perdas && (
+            <p className="text-xs text-slate-500">
+              {perdas.total > 0 ? (
+                <>
+                  Perdas anotadas no mês: <strong className="text-slate-700">{moeda(perdas.total)}</strong>
+                  {teorico.venda > 0 && <> ({pct.format(perdas.total / teorico.venda).replace("%", " p.p.")} das vendas)</>}
+                  {realMes.variacao !== null && pTeorico !== null && (
+                    <>
+                      {" "}
+                      de uma diferença de {moeda(Math.max(0, realMes.cmv - teorico.cmv))} entre o real e o teórico
+                    </>
+                  )}
+                  : {perdas.porMotivo.map((m) => `${m.rotulo.toLowerCase()} ${moeda(m.valor)}`).join(", ")}.{" "}
+                </>
+              ) : (
+                <>Nenhuma perda anotada neste mês. </>
+              )}
+              <Link href="?aba=perdas" className="font-medium text-marca-700 underline">
+                Anotar perdas
+              </Link>
             </p>
           )}
         </div>
