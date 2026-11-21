@@ -84,7 +84,7 @@ export async function AbaNotas({
         </p>
         {notas.length === 0 ? (
           <Vazio icone={<ReceiptText />}>
-            Nenhuma nota nos últimos 6 meses. Importe o XML da NF-e (e da NFS-e, quando houver) ou lance a nota à mão.
+            Nenhuma nota nos últimos 6 meses. Importe o XML ou o PDF da NF-e (e da NFS-e, quando houver) ou lance a nota à mão.
           </Vazio>
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -127,7 +127,7 @@ export async function AbaNotas({
                         {n.chave && n.tipo === "produto" && <> · chave {n.chave}</>}
                         {n.remessa && <> · remessa {n.remessa}</>}
                         {n.valor_frete > 0 && <> · frete {real(n.valor_frete)}</>}
-                        {n.origem === "xml" ? " · importada do XML" : " · lançada à mão"}
+                        {n.origem === "manual" ? " · lançada à mão" : /\.pdf$/i.test(n.arquivo_nome ?? "") ? " · importada do PDF" : " · importada do XML"}
                         {n.observacoes && <> · {n.observacoes}</>}
                       </p>
                       {n.itens.length > 0 && (
