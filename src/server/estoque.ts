@@ -337,13 +337,65 @@ export async function salvarNota(empresaId: string, id: string | null, nota: Not
         ? { ...f, duplicatas: f.duplicatas.map((d) => ({ numero: curto(d.numero, 20), vencimento: d.vencimento, valor: r(d.valor) })) }
         : f.modo === "ligar"
           ? { modo: "ligar", lancamentos: f.lancamentos.slice(0, 50) }
-          : { modo: f.modo },
+          : // No cartão, a nota grava primeiro sem pagamento; a compra no cartão vem logo depois.
+            { modo: f.modo === "cartao" ? "nenhum" : f.modo },
   };
   const supabase = await criarCliente();
   const { data, error } = await supabase.rpc("fin_estoque_salvar_nota", { p_empresa: empresaId, p_id: id, p_nota: p });
   if (error) return falhaEstoque(error)!;
+  const notaId = data as string;
+  if (f.modo === "cartao") {
+    const falha = await comprarNoCartao(supabase, empresaId, notaId, nota, f);
+    if (falha) {
+      // Nota nova: desfaz, para não ficar uma nota sem o pagamento que a pessoa pediu.
+      if (!id) await supabase.rpc("fin_estoque_apagar_nota", { p_id: notaId });
+      atualizarTelas();
+      return { erro: id ? `A nota foi salva, mas a compra no cartão não: ${falha}` : falha };
+    }
+  }
   atualizarTelas();
-  return { id: data as string };
+  return { id: notaId };
+}
+
+// A nota paga no cartão vira uma compra no cartão (fin_lancar_no_cartao, a mesma da aba Cartões), com o
+// fornecedor e a conta da nota e competência na entrada, e as parcelas ficam ligadas à nota.
+async function comprarNoCartao(
+  supabase: Awaited<ReturnType<typeof criarCliente>>,
+  empresaId: string,
+  notaId: string,
+  nota: NotaEnviada,
+  f: Extract<NotaEnviada["financeiro"], { modo: "cartao" }>,
+): Promise<string | null> {
+  const { data: gravada, error: e1 } = await supabase.from("fin_estoque_notas").select("contraparte_id, emitente_nome").eq("id", notaId).single();
+  if (e1 || !gravada) return "Não consegui ler a nota gravada.";
+  const { data: fornecedor } = gravada.contraparte_id
+    ? await supabase.from("fin_contrapartes").select("nome").eq("id", gravada.contraparte_id).maybeSingle()
+    : { data: null };
+  const documento = `${nota.tipo === "servico" ? "NFS" : "NF"}${nota.numero ? ` ${curto(nota.numero, 30)}` : ""}`;
+  const valor = Math.round(nota.valor_total) / 100;
+  const { data: compra, error: e2 } = await supabase.rpc("fin_lancar_no_cartao", {
+    p_cartao: f.cartao_id,
+    p_direcao: "saida",
+    p_valor_total: valor,
+    p_data_compra: f.data_compra,
+    p_parcelas: f.parcelas,
+    p_primeira_fatura: f.primeira_fatura ? `${f.primeira_fatura}-01` : null,
+    p_descricao: `${documento} · ${fornecedor?.nome ?? gravada.emitente_nome}`.slice(0, 200),
+    p_documento: documento,
+    p_rateios: [{ conta_id: f.conta_id, valor }],
+    p_contraparte: gravada.contraparte_id,
+    p_observacoes: null,
+    p_competencia: nota.entrada,
+  });
+  if (e2) return falhaEstoque(e2)!.erro;
+  const { data: parcelas, error: e3 } = await supabase.from("fin_lancamentos").select("id").eq("compra_id", compra as string);
+  const ligar = (parcelas ?? []).map((l) => ({ empresa_id: empresaId, nota_id: notaId, lancamento_id: l.id }));
+  const { error: e4 } = e3 || !ligar.length ? { error: e3 ?? { message: "Compra no cartão sem parcelas." } } : await supabase.from("fin_estoque_notas_lancamentos").insert(ligar);
+  if (e4) {
+    await supabase.from("fin_lancamentos").update({ situacao: "cancelado", cancelado_em: new Date().toISOString() }).eq("compra_id", compra as string);
+    return falhaEstoque(e4)!.erro;
+  }
+  return null;
 }
 
 export async function apagarNota(id: string) {

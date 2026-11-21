@@ -348,6 +348,9 @@ export type ItemEnviado = {
 export type FinanceiroNota =
   | { modo: "criar"; conta_caixa_id: string; conta_id: string; duplicatas: Duplicata[] }
   | { modo: "ligar"; lancamentos: string[] }
+  // Compra no cartão de crédito (0011): a nota vira a compra, nas faturas do cartão. primeira_fatura: AAAA-MM ou
+  // null (pelo dia de fechamento).
+  | { modo: "cartao"; cartao_id: string; conta_id: string; data_compra: string; parcelas: number; primeira_fatura: string | null }
   | { modo: "nenhum" }
   | { modo: "manter" };
 
@@ -410,6 +413,13 @@ export function conferirNota(n: NotaEnviada): string | null {
     }
     const soma = f.duplicatas.reduce((s, d) => s + d.valor, 0);
     if (soma !== n.valor_total) return `Os vencimentos somam ${reais(soma)}, mas o total da nota é ${reais(n.valor_total)}.`;
+  } else if (f.modo === "cartao") {
+    if (!f.cartao_id) return "Escolha o cartão.";
+    if (!f.conta_id) return "Escolha a conta do plano (a categoria da compra).";
+    if (!DATA.test(f.data_compra ?? "")) return "Informe a data da compra no cartão.";
+    if (!Number.isInteger(f.parcelas) || f.parcelas < 1 || f.parcelas > 48) return "Parcelas: de 1 a 48.";
+    if (f.parcelas > n.valor_total) return "O valor é pequeno demais para tantas parcelas.";
+    if (f.primeira_fatura && !/^\d{4}-\d{2}$/.test(f.primeira_fatura)) return "Escolha a fatura da primeira parcela.";
   } else if (f.modo === "ligar") {
     if (!f.lancamentos.length) return "Marque o lançamento que paga esta nota (ou escolha outra opção).";
   } else if (f.modo !== "nenhum" && f.modo !== "manter") return "Escolha o que fazer com o pagamento.";
