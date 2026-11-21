@@ -185,6 +185,17 @@ insert into _casos (caso, esperado, pessoa, sql, antes) values
   pg_temp.base() || $a$; update public.empresas set financeiro_na_central = true where id = '00000000-0000-0000-0000-0000000000e1'$a$),
 ('cliente com central da A só lê as notas, como o resto do financeiro', '1', 'cliente_a', 'select count(*)::text from public.fin_estoque_notas',
   pg_temp.base() || pg_temp.como_equipe() || '; select ' || pg_temp.salvar(pg_temp.nf()) || $a$; update public.empresas set financeiro_na_central = true where id = '00000000-0000-0000-0000-0000000000e1'$a$),
+-- Nota paga no cartão: o servidor grava a nota sem pagamento, lança a compra no cartão (fin_lancar_no_cartao, da 0011)
+-- e liga as parcelas à nota, como a equipe.
+('nota paga no cartão: as parcelas da compra se ligam à nota', 'aceito', 'equipe',
+  pg_temp.confere('perform ' || pg_temp.salvar(pg_temp.nf(pg_temp.fin('{"modo":"nenhum"}'))) || $a$;
+    perform public.fin_lancar_no_cartao('00000000-0000-0000-0000-00000000ca01', 'saida', 415, '2026-10-09', 2, null, 'NF 1 · Fornecedor Fictício', 'NF 1',
+      '[{"conta_id":"00000000-0000-0000-0000-00000000f104","valor":415}]', (select contraparte_id from public.fin_estoque_notas where chave = 'A1'), null, '2026-10-10');
+    insert into public.fin_estoque_notas_lancamentos (empresa_id, nota_id, lancamento_id)
+      select l.empresa_id, (select id from public.fin_estoque_notas where chave = 'A1'), l.id from public.fin_lancamentos l where l.compra_id is not null$a$,
+    pg_temp.lancs(), '207.50@2026-10-10>2026-11-05:previsto:NF 1:Fornecedor Fictício 207.50@2026-10-10>2026-12-05:previsto:NF 1:Fornecedor Fictício'),
+  pg_temp.base() || $a$; insert into public.fin_cartoes (id, empresa_id, nome, conta_caixa_id, dia_fechamento, dia_vencimento) values
+    ('00000000-0000-0000-0000-00000000ca01', '00000000-0000-0000-0000-0000000000e1', 'Visa empresa', '00000000-0000-0000-0000-00000000c101', 25, 5)$a$),
 ('sem login (anon) não grava nota', 'sem_permissao', 'anon', $q$select public.fin_estoque_salvar_nota(gen_random_uuid(), null, '{}')::text$q$, null);
 create or replace function pg_temp.rodar() returns jsonb language plpgsql as $$
 declare v_res jsonb := '[]'; c record; v text;

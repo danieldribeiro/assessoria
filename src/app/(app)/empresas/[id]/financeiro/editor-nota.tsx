@@ -6,6 +6,7 @@ import { createContext, useContext, useRef, useState, useTransition, type ReactN
 import { avisar } from "@/components/avisos";
 import { EntradaMoeda } from "@/components/entrada-moeda";
 import { Botao, Campo, Entrada, Selecao, classeBotao, classeInput, cx } from "@/components/ui";
+import { referenciaDaCompra } from "@/lib/financeiro/cartao";
 import { chaveNome } from "@/lib/financeiro/estoque";
 import {
   chaveItemNota,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/financeiro/notas";
 import { carregarPdfJs, paginasDoPdf } from "@/lib/financeiro/ler-pdf";
 import { lerNotaPdf } from "@/lib/financeiro/notas-pdf";
+import { somarMeses } from "@/lib/financeiro/periodo";
 import { moedaParaCampo } from "@/lib/moeda";
 import { lerNumeroBR, paraCampoBR } from "@/lib/numeros";
 import { salvarNota } from "@/server/estoque";
@@ -29,6 +31,7 @@ export type InsumoNota = { id: string; nome: string; unidade: string };
 export type DeParaNotaCliente = { fornecedor: string; chave: string; item_id: string | null; fator: number; ignorar: boolean };
 export type ContraparteNota = { id: string; nome: string; documento: string | null };
 export type OpcaoNota = { valor: string; rotulo: string };
+export type CartaoNota = OpcaoNota & { dia_fechamento: number; dia_vencimento: number };
 export type SaidaNota = {
   id: string;
   descricao: string | null;
@@ -56,6 +59,7 @@ type Contexto = {
   contas: OpcaoNota[];
   contaPadrao: string;
   caixas: OpcaoNota[];
+  cartoes: CartaoNota[];
   saidas: SaidaNota[];
   notasProduto: NotaProdutoRef[];
 };
@@ -103,6 +107,10 @@ type Form = {
   modo: FinanceiroNota["modo"];
   conta_id: string;
   caixa_id: string;
+  cartao_id: string;
+  data_compra: string; // no cartão: decide a fatura
+  parcelas: string;
+  primeira_fatura: string; // AAAA-MM; vazio = automática, pelo dia de fechamento
   vencimentos: VencForm[];
   ligar: string[];
   temLancamentos: boolean;
@@ -196,6 +204,10 @@ function formDaNota(n: NotaLida, arquivo: string, ctx: Contexto, origem: "xml" |
     modo: "criar",
     conta_id: ctx.contaPadrao,
     caixa_id: ctx.caixas[0]?.valor ?? "",
+    cartao_id: ctx.cartoes.length === 1 ? ctx.cartoes[0].valor : "",
+    data_compra: "",
+    parcelas: "1",
+    primeira_fatura: "",
     vencimentos: n.duplicatas.map((d) => ({ k: k(), vencimento: d.vencimento, valor: moedaParaCampo(d.valor / 100) })),
     ligar: [],
     temLancamentos: false,
@@ -245,6 +257,10 @@ function formVazio(ctx: Contexto): Form {
     modo: "criar",
     conta_id: ctx.contaPadrao,
     caixa_id: ctx.caixas[0]?.valor ?? "",
+    cartao_id: ctx.cartoes.length === 1 ? ctx.cartoes[0].valor : "",
+    data_compra: "",
+    parcelas: "1",
+    primeira_fatura: "",
     vencimentos: [{ k: k(), vencimento: "", valor: "" }],
     ligar: [],
     temLancamentos: false,
@@ -329,6 +345,15 @@ function montar(f: Form, ctx: Contexto): NotaEnviada | string {
       duplicatas.push({ numero: null, vencimento: v.vencimento, valor });
     }
     financeiro = { modo: "criar", conta_caixa_id: f.caixa_id, conta_id: f.conta_id, duplicatas };
+  } else if (f.modo === "cartao") {
+    financeiro = {
+      modo: "cartao",
+      cartao_id: f.cartao_id,
+      conta_id: f.conta_id,
+      data_compra: f.data_compra || f.emissao || f.entrada,
+      parcelas: Number(f.parcelas),
+      primeira_fatura: f.primeira_fatura || null,
+    };
   } else if (f.modo === "ligar") financeiro = { modo: "ligar", lancamentos: f.ligar };
   else financeiro = { modo: f.modo };
   const nota: NotaEnviada = {
@@ -718,6 +743,7 @@ function FormNota({ f, ctx, mudar, mudarItem }: { f: Form; ctx: Contexto; mudar:
             [
               ...(f.id ? [["manter", "Manter como está"]] : []),
               ...(!f.temLancamentos ? [["criar", "Criar contas a pagar"]] : []),
+              ...(!f.temLancamentos && ctx.cartoes.length ? [["cartao", "Pagar no cartão"]] : []),
               ["ligar", "Ligar a lançamentos que já existem"],
               ["nenhum", "Sem pagamento"],
             ] as [Form["modo"], string][]
@@ -766,6 +792,7 @@ function FormNota({ f, ctx, mudar, mudarItem }: { f: Form; ctx: Contexto; mudar:
             </div>
           </div>
         )}
+        {f.modo === "cartao" && <PagamentoCartao f={f} ctx={ctx} mudar={mudar} total={total} />}
         {f.modo === "ligar" && (
           <div className="space-y-1 rounded-lg bg-slate-50 p-3">
             {cands.length === 0 ? (
@@ -799,6 +826,58 @@ function FormNota({ f, ctx, mudar, mudarItem }: { f: Form; ctx: Contexto; mudar:
       <Campo rotulo="Observações">
         <Entrada value={f.observacoes} onChange={(e) => mudar({ observacoes: e.target.value })} />
       </Campo>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pagamento no cartão: a nota vira uma compra no cartão (como na aba Cartões), uma parcela por fatura.
+
+const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const mesCurto = (m: string) => `${MESES_CURTOS[Number(m.slice(5, 7)) - 1]}/${m.slice(0, 4)}`;
+
+function PagamentoCartao({ f, ctx, mudar, total }: { f: Form; ctx: Contexto; mudar: (m: Partial<Form>) => void; total: number }) {
+  const cartao = ctx.cartoes.find((c) => c.valor === f.cartao_id);
+  const dataCompra = f.data_compra || f.emissao || f.entrada;
+  const automatica = cartao && /^\d{4}-\d{2}-\d{2}$/.test(dataCompra) ? referenciaDaCompra(cartao, dataCompra) : null;
+  const meses = automatica ? Array.from({ length: 7 }, (_, i) => somarMeses(automatica, i - 2)).filter((m) => m !== automatica) : [];
+  const n = Math.max(1, Math.min(48, Number(f.parcelas) || 1));
+  const inicio = f.primeira_fatura || automatica;
+  const parcela = Math.floor(total / n);
+  return (
+    <div className="space-y-3 rounded-lg bg-slate-50 p-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Campo rotulo="Conta do plano">
+          <Selecao value={f.conta_id} onChange={(e) => mudar({ conta_id: e.target.value })} vazio="Escolha" opcoes={ctx.contas} />
+        </Campo>
+        <Campo rotulo="Cartão">
+          <Selecao value={f.cartao_id} onChange={(e) => mudar({ cartao_id: e.target.value, primeira_fatura: "" })} vazio="Escolha" opcoes={ctx.cartoes} />
+        </Campo>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Campo rotulo="Data da compra" dica="Decide a fatura">
+          <Entrada type="date" value={dataCompra} onChange={(e) => mudar({ data_compra: e.target.value, primeira_fatura: "" })} />
+        </Campo>
+        <Campo rotulo="Parcelas">
+          <Entrada type="number" min={1} max={48} value={f.parcelas} onChange={(e) => mudar({ parcelas: e.target.value })} />
+        </Campo>
+        <Campo rotulo={n > 1 ? "Fatura da 1ª parcela" : "Fatura"}>
+          <Selecao
+            value={f.primeira_fatura}
+            onChange={(e) => mudar({ primeira_fatura: e.target.value })}
+            vazio={automatica ? `Automática: ${mesCurto(automatica)}` : "Escolha o cartão"}
+            opcoes={meses.map((m) => ({ valor: m, rotulo: `Vence em ${mesCurto(m)}` }))}
+          />
+        </Campo>
+      </div>
+      {inicio && total >= n && (
+        <p className="text-xs text-slate-500">
+          {n === 1
+            ? `Entra na fatura que vence em ${mesCurto(inicio)}`
+            : `${n} parcelas de ${real(parcela)}${total % n ? ` (a primeira, ${real(parcela + (total % n))})` : ""}, nas faturas de ${mesCurto(inicio)} a ${mesCurto(somarMeses(inicio, n - 1))}`}
+          . Fica prevista até a fatura ser paga, e entra no Resultado no mês da entrada da nota ({dataBR(f.entrada) || "—"}).
+        </p>
+      )}
     </div>
   );
 }

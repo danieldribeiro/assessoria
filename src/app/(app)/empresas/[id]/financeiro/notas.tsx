@@ -3,7 +3,7 @@ import { BotaoAcao } from "@/components/controles";
 import { CabecalhoCartao, Cartao, Etiqueta, Vazio, classeBotao, classeTabela as t } from "@/components/ui";
 import { hoje } from "@/lib/datas";
 import { carregarDePara, carregarItensEstoque, carregarNotas, carregarSaidasParaLigar, type NotaCompra } from "@/lib/financeiro/consultas";
-import type { ContaCaixa, ContaPlano, Contraparte } from "@/lib/financeiro/dominio";
+import type { Cartao as CartaoCredito, ContaCaixa, ContaPlano, Contraparte } from "@/lib/financeiro/dominio";
 import { apagarNota } from "@/server/estoque";
 import { ContextoNotas, EditorNotas, type NotaGravada } from "./editor-nota";
 
@@ -30,8 +30,10 @@ export async function AbaNotas({
   contas,
   caixas,
   contrapartes,
+  cartoes,
 }: {
   empresa: { id: string };
+  cartoes: CartaoCredito[];
   contas: ContaPlano[];
   caixas: ContaCaixa[];
   contrapartes: Contraparte[];
@@ -63,6 +65,7 @@ export async function AbaNotas({
     contas: analiticas.map((c) => ({ valor: c.id, rotulo: `${c.codigo} ${c.nome}` })),
     contaPadrao,
     caixas: caixas.filter((c) => c.ativa).map((c) => ({ valor: c.id, rotulo: c.nome })),
+    cartoes: cartoes.filter((c) => c.ativo).map((c) => ({ valor: c.id, rotulo: c.nome, dia_fechamento: c.dia_fechamento, dia_vencimento: c.dia_vencimento })),
     saidas: saidas.map((s) => ({ ...s, ligada: ligadas.has(s.id) })),
     notasProduto: notas
       .filter((n) => n.tipo === "produto")

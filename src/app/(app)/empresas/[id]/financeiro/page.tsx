@@ -179,7 +179,7 @@ export default async function PaginaFinanceiro({ params, searchParams }: PagePro
           {aba === "contagens" && <AbaContagens empresa={empresa} contagemId={valor("contagem") ?? null} />}
           {aba === "insumos" && <AbaInsumos empresa={empresa} />}
           {aba === "perdas" && <AbaPerdas empresa={empresa} mes={valor("mes")} />}
-          {aba === "notas" && <AbaNotas empresa={empresa} contas={dados.contas} caixas={dados.caixas} contrapartes={dados.contrapartes} />}
+          {aba === "notas" && <AbaNotas empresa={empresa} contas={dados.contas} caixas={dados.caixas} contrapartes={dados.contrapartes} cartoes={dados.recursos.cartoes ? dados.cartoes : []} />}
           {aba === "fichas" && <AbaFichas empresa={empresa} />}
           {aba === "cmv" && <AbaCmv empresa={empresa} contas={dados.contas} mes={valor("mes")} />}
           {aba === "plano" && <AbaPlanoContas {...dados} />}

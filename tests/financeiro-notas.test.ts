@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   centavosXml,
+  conferirNota,
   custosDosItens,
   duplicatasOuUnica,
   lerNotaFiscal,
@@ -9,6 +10,7 @@ import {
   notaReferida,
   raizCnpj,
   ratearCentavos,
+  type NotaEnviada,
   type NotaLida,
 } from "@/lib/financeiro/notas";
 
@@ -135,5 +137,27 @@ describe("rateio", () => {
 
   it("sem duplicatas na nota, vira um vencimento único no valor total", () => {
     expect(duplicatasOuUnica({ duplicatas: [], valorTotal: 900 }, "2026-10-30")).toEqual([{ numero: null, vencimento: "2026-10-30", valor: 900 }]);
+  });
+});
+
+describe("pagamento no cartão", () => {
+  const base: NotaEnviada = {
+    tipo: "servico", chave: null, numero: "9", serie: null, emissao: "2026-11-14", entrada: "2026-11-15", contraparte_id: null,
+    emitente_documento: null, emitente_nome: "Fornecedor", valor_total: 300, valor_frete: 0, nota_produto_id: null, remessa: null,
+    origem: "manual", arquivo_nome: null, informacoes: null, observacoes: null, itens: [],
+    financeiro: { modo: "cartao", cartao_id: "c1", conta_id: "k1", data_compra: "2026-11-14", parcelas: 3, primeira_fatura: null },
+  };
+  const com = (f: Partial<Extract<NotaEnviada["financeiro"], { modo: "cartao" }>>) => ({ ...base, financeiro: { ...base.financeiro, ...f } as NotaEnviada["financeiro"] });
+
+  it("aceita a compra no cartão e confere cartão, conta, data, parcelas e fatura", () => {
+    expect(conferirNota(base)).toBeNull();
+    expect(conferirNota(com({ primeira_fatura: "2026-12" }))).toBeNull();
+    expect(conferirNota(com({ cartao_id: "" }))).toMatch(/cartão/);
+    expect(conferirNota(com({ conta_id: "" }))).toMatch(/conta do plano/);
+    expect(conferirNota(com({ data_compra: "" }))).toMatch(/data da compra/);
+    expect(conferirNota(com({ parcelas: 0 }))).toMatch(/Parcelas/);
+    expect(conferirNota(com({ parcelas: 301 }))).toMatch(/Parcelas|pequeno/);
+    expect(conferirNota({ ...com({ parcelas: 4 }), valor_total: 3 })).toMatch(/pequeno demais/);
+    expect(conferirNota(com({ primeira_fatura: "12/2026" }))).toMatch(/fatura/);
   });
 });
