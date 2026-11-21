@@ -17,6 +17,8 @@ import {
   type NotaEnviada,
   type NotaLida,
 } from "@/lib/financeiro/notas";
+import { carregarPdfJs, paginasDoPdf } from "@/lib/financeiro/ler-pdf";
+import { lerNotaPdf } from "@/lib/financeiro/notas-pdf";
 import { moedaParaCampo } from "@/lib/moeda";
 import { lerNumeroBR, paraCampoBR } from "@/lib/numeros";
 import { salvarNota } from "@/server/estoque";
@@ -92,7 +94,7 @@ type Form = {
   remessa: string;
   nota_produto_id: string;
   notaReferida: string | null;
-  origem: "xml" | "manual";
+  origem: "xml" | "pdf" | "manual"; // do PDF: itens lidos linha a linha, então ficam editáveis como na nota à mão
   arquivo: string | null;
   informacoes: string | null;
   observacoes: string;
@@ -148,7 +150,7 @@ function acharContraparte(ctx: Contexto, documento: string | null, nome: string)
 }
 
 // Nota lida do XML → formulário, com o de-para e os lançamentos que parecem pagá-la.
-function formDaNota(n: NotaLida, arquivo: string, ctx: Contexto): Form {
+function formDaNota(n: NotaLida, arquivo: string, ctx: Contexto, origem: "xml" | "pdf" = "xml"): Form {
   const raiz = raizCnpj(n.emitente.documento);
   const porId = new Map(ctx.insumos.map((i) => [i.id, i]));
   const porNome = new Map(ctx.insumos.map((i) => [chaveNome(i.nome), i]));
@@ -170,7 +172,7 @@ function formDaNota(n: NotaLida, arquivo: string, ctx: Contexto): Form {
     remessa: "",
     nota_produto_id: "",
     notaReferida: n.notaReferida,
-    origem: "xml",
+    origem,
     arquivo,
     informacoes: n.informacoes,
     observacoes: "",
@@ -268,7 +270,7 @@ function formDaGravada(n: NotaGravada, ctx: Contexto): Form {
     frete: moedaParaCampo(n.valor_frete / 100),
     remessa: n.remessa ?? "",
     nota_produto_id: n.nota_produto_id ?? "",
-    origem: n.origem,
+    origem: n.origem === "xml" && /\.pdf$/i.test(n.arquivo_nome ?? "") ? "pdf" : n.origem,
     arquivo: n.arquivo_nome,
     informacoes: n.informacoes,
     observacoes: n.observacoes ?? "",
@@ -343,7 +345,7 @@ function montar(f: Form, ctx: Contexto): NotaEnviada | string {
     valor_frete: f.tipo === "produto" ? frete : 0,
     nota_produto_id: f.tipo === "servico" ? f.nota_produto_id || null : null,
     remessa: f.tipo === "produto" ? f.remessa.trim() || null : null,
-    origem: f.origem,
+    origem: f.origem === "manual" ? "manual" : "xml", // nota de PDF grava como importada de arquivo
     arquivo_nome: f.arquivo,
     informacoes: f.informacoes,
     observacoes: f.observacoes.trim() || null,
@@ -388,9 +390,14 @@ export function EditorNotas({ modo }: { modo: Modo }) {
         erros.push(`${a.name}: arquivo grande demais.`);
         continue;
       }
-      const lida = lerNotaFiscal(await a.text());
-      if ("erro" in lida) erros.push(`${a.name}: ${lida.erro}`);
-      else notas.push(formDaNota(lida, a.name, contexto));
+      const pdf = a.type === "application/pdf" || /\.pdf$/i.test(a.name);
+      try {
+        const lida = pdf ? lerNotaPdf(await paginasDoPdf(await carregarPdfJs(), await a.arrayBuffer())) : lerNotaFiscal(await a.text());
+        if ("erro" in lida) erros.push(`${a.name}: ${lida.erro}`);
+        else notas.push(formDaNota(lida, a.name, contexto, pdf ? "pdf" : "xml"));
+      } catch {
+        erros.push(`${a.name}: não consegui abrir o ${pdf ? "PDF (arquivo com senha ou danificado?)" : "arquivo"}.`);
+      }
     }
     // Produtos antes dos serviços: a NFS-e se liga à NF-e gravada logo antes.
     notas.sort((a, b) => (a.tipo === b.tipo ? 0 : a.tipo === "produto" ? -1 : 1));
@@ -426,7 +433,7 @@ export function EditorNotas({ modo }: { modo: Modo }) {
     });
   }
 
-  const titulo = modo.tipo === "editar" ? "Editar nota" : modo.tipo === "manual" ? "Lançar nota à mão" : "Importar notas (XML)";
+  const titulo = modo.tipo === "editar" ? "Editar nota" : modo.tipo === "manual" ? "Lançar nota à mão" : "Importar notas (XML ou PDF)";
   return (
     <>
       {modo.tipo === "editar" ? (
@@ -436,7 +443,7 @@ export function EditorNotas({ modo }: { modo: Modo }) {
       ) : (
         <button type="button" onClick={abrir} className={classeBotao(modo.tipo === "xml" ? "primario" : "secundario", true)}>
           {modo.tipo === "xml" ? <FileUp className="size-4" /> : <PenLine className="size-4" />}
-          {modo.tipo === "xml" ? "Importar XML" : "Lançar à mão"}
+          {modo.tipo === "xml" ? "Importar XML ou PDF" : "Lançar à mão"}
         </button>
       )}
       <dialog
@@ -461,13 +468,14 @@ export function EditorNotas({ modo }: { modo: Modo }) {
                   key={chaveArquivo}
                   type="file"
                   multiple
-                  accept=".xml,text/xml,application/xml"
+                  accept=".xml,.pdf,text/xml,application/xml,application/pdf"
                   onChange={(e) => ler(e.target.files)}
                   className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-superficie file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-50"
                 />
                 <p className="text-xs text-slate-500">
-                  Selecione um ou mais XML de NF-e (produtos) e de NFS-e (serviço). Cada nota é conferida aqui antes de gravar. Para nota só em papel ou
-                  PDF, use <strong>Lançar à mão</strong>.
+                  Selecione um ou mais arquivos da NF-e (produtos) e da NFS-e (serviço): o XML, ou o PDF quando não tiver o XML. Cada nota é conferida
+                  aqui antes de gravar. O PDF precisa ser o original, em que dá para selecionar o texto; nota escaneada ou foto, use{" "}
+                  <strong>Lançar à mão</strong>.
                 </p>
                 <Avisos titulo="Arquivos não lidos" linhas={lidas.erros} />
                 {lidas.total > 0 && !f && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">Todas as notas foram conferidas.</p>}
@@ -620,7 +628,7 @@ function FormNota({ f, ctx, mudar, mudarItem }: { f: Form; ctx: Contexto; mudar:
               return (
                 <div key={i.k} className="rounded-lg border border-slate-200 p-3">
                   <div className="grid grid-cols-[1fr_4.5rem_1.4fr_2rem] gap-2 sm:grid-cols-[1fr_6rem_5rem_8rem_2rem]">
-                    {f.origem === "manual" ? (
+                    {f.origem !== "xml" ? (
                       <input value={i.descricao} onChange={(e) => mudarItem(i.k, { descricao: e.target.value })} placeholder="Descrição na nota" aria-label="Descrição" className={cx(classeInput, "col-span-4 sm:col-span-1")} />
                     ) : (
                       <p className="col-span-4 self-center font-medium text-slate-800 sm:col-span-1">
@@ -631,7 +639,7 @@ function FormNota({ f, ctx, mudar, mudarItem }: { f: Form; ctx: Contexto; mudar:
                     <input value={i.quantidade} onChange={(e) => mudarItem(i.k, { quantidade: e.target.value })} inputMode="decimal" placeholder="Quant." aria-label="Quantidade" className={cx(classeInput, "text-right tabular-nums")} />
                     <input value={i.unidade} onChange={(e) => mudarItem(i.k, { unidade: e.target.value })} placeholder="Unid." aria-label="Unidade na nota" className={classeInput} />
                     <EntradaMoeda value={i.valor} onChange={(valor) => mudarItem(i.k, { valor })} aria-label="Valor do item" />
-                    {f.origem === "manual" ? (
+                    {f.origem !== "xml" ? (
                       <button
                         type="button"
                         onClick={() => mudar({ itens: f.itens.filter((x) => x.k !== i.k) })}
@@ -690,7 +698,7 @@ function FormNota({ f, ctx, mudar, mudarItem }: { f: Form; ctx: Contexto; mudar:
               );
             })}
           </div>
-          {f.origem === "manual" && (
+          {f.origem !== "xml" && (
             <button type="button" onClick={() => mudar({ itens: [...f.itens, itemVazio()] })} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-marca-700 hover:bg-marca-50">
               <Plus className="size-3.5" /> Adicionar item
             </button>
