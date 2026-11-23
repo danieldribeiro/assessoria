@@ -152,6 +152,29 @@ export async function salvarCustos(empresaId: string, dados: FormData) {
   atualizarTelas();
 }
 
+// Insumo cadastrado à mão (aba Insumos). O nome repetido (sem diferença de maiúsculas) é barrado pelo banco.
+export async function criarInsumo(empresaId: string, dados: FormData) {
+  const nome = curto(texto(dados, "nome"), 120);
+  const unidade = curto(texto(dados, "unidade"), 20);
+  if (!nome) return { erro: "Informe o nome do insumo." };
+  if (!unidade) return { erro: "Informe a unidade em que o insumo é contado (ex.: kg, un, pct)." };
+  const leitura = lerNumeroBR(texto(dados, "custo"));
+  if (leitura.estado === "invalido") return { erro: `Custo: “${leitura.texto}” não é um número. Use vírgula para os centavos, ex.: 3,69.` };
+  const custo = leitura.estado === "valido" ? leitura.valor : null;
+  if (custo !== null && custo < 0) return { erro: "O custo não pode ser negativo." };
+  const supabase = await criarCliente();
+  const { error } = await supabase.from("fin_estoque_itens").insert({
+    empresa_id: empresaId,
+    nome,
+    unidade,
+    categoria: curto(texto(dados, "categoria"), 60),
+    custo_unitario: custo === null ? null : Math.round(custo * 10000) / 10000,
+    fora_do_cmv: marcado(dados, "fora_do_cmv"),
+  });
+  if (error) return falhaEstoque(error);
+  atualizarTelas();
+}
+
 // Lista de custos lida de uma planilha: casa pelo nome do insumo (sem diferença de maiúsculas e acentos).
 export async function importarCustos(empresaId: string, custos: { nome: string; custo: number }[]) {
   if (!Array.isArray(custos) || custos.length > MAX_ITENS) return { erro: "Planilha de custos inválida." };
