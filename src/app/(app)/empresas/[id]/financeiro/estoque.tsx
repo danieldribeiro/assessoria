@@ -9,6 +9,7 @@ import { FiltroLista } from "./filtro-lista";
 import { paraCampoBR } from "@/lib/numeros";
 import { apagarContagem, fecharContagem, reabrirContagem, salvarCustos } from "@/server/estoque";
 import { ImportarContagem, ImportarCustos } from "./importar-estoque";
+import { NovoInsumo } from "./novo-insumo";
 
 const moeda = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const custo = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 4 });
@@ -214,12 +215,17 @@ export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
     <div className="space-y-6">
       <Cartao>
         <CabecalhoCartao titulo="Insumos" contagem={itens.length}>
+          <NovoInsumo
+            empresaId={empresa.id}
+            unidades={[...new Set(["un", "kg", "g", "L", "ml", "pct", "cx", ...itens.map((i) => i.unidade)])]}
+            categorias={[...new Set(itens.map((i) => i.categoria).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, "pt-BR"))}
+          />
           {itens.length > 0 && <ImportarCustos empresaId={empresa.id} insumos={itens.map((i) => i.nome)} />}
         </CabecalhoCartao>
         {itens.length === 0 ? (
           <Vazio icone={<Boxes />}>
-            Os insumos aparecem aqui quando você importa a primeira contagem, na aba Contagens. Depois é só informar o
-            custo de cada um, digitando ou importando uma planilha de custos.
+            Os insumos aparecem aqui quando você importa a primeira contagem, na aba Contagens, ou quando cadastra um em
+            Novo insumo. Depois é só informar o custo de cada um, digitando ou importando uma planilha de custos.
           </Vazio>
         ) : (
           <>
@@ -231,7 +237,7 @@ export async function AbaInsumos({ empresa }: { empresa: { id: string } }) {
             <FiltroLista
               alvo="lista-insumos"
               rotuloBusca="Buscar insumo"
-              categorias={[...new Set(itens.map((i) => i.categoria).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, "pt-BR"))}
+            categorias={[...new Set(itens.map((i) => i.categoria).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, "pt-BR"))}
               situacoes={[
                 { valor: "sem-custo", rotulo: "Sem custo" },
                 { valor: "com-custo", rotulo: "Com custo" },
